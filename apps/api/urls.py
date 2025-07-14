@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view
-from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view
+from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view
 from apps.alumni_users.views import alumni_list_view, alumni_detail_view
 from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel
 
@@ -22,6 +22,7 @@ urlpatterns = [
     path('tracker/responses/', submit_tracker_response_view, name='submit_tracker_response'),  # POST for submission
     path('tracker/list-responses/', tracker_responses_view, name='tracker_responses'),         # GET for listing
     path('tracker/user-responses/<int:user_id>/', tracker_responses_by_user_view, name='tracker_responses_by_user'),
+    path('tracker/check-status/', check_user_tracker_status_view, name='check_user_tracker_status'),
     path('tracker/add-category/', add_category_view, name='add_category'),
     path('tracker/delete-category/<int:category_id>/', delete_category_view, name='delete_category'),
     path('tracker/delete-question/<int:question_id>/', delete_question_view, name='delete_question'),

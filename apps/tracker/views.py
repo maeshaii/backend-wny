@@ -199,11 +199,34 @@ def tracker_form_view(request, tracker_form_id):
         return JsonResponse({'success': False, 'message': 'TrackerForm not found'}, status=404)
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def check_user_tracker_status_view(request):
+    from apps.shared.models import User, TrackerResponse
+    
+    user_id = request.GET.get('user_id')
+    if not user_id:
+        return JsonResponse({'success': False, 'message': 'user_id is required'}, status=400)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        existing_response = TrackerResponse.objects.filter(user=user).first()
+        
+        return JsonResponse({
+            'success': True, 
+            'has_submitted': existing_response is not None,
+            'submitted_at': existing_response.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if existing_response else None
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def submit_tracker_response_view(request):
     import json
     from django.utils import timezone
-    from apps.shared.models import TrackerResponse, User
+    from apps.shared.models import TrackerResponse, User, Notification
 
     try:
         data = json.loads(request.body)
@@ -212,7 +235,23 @@ def submit_tracker_response_view(request):
         if not user_id or not answers:
             return JsonResponse({'success': False, 'message': 'Missing user_id or answers'}, status=400)
         user = User.objects.get(pk=user_id)
+        
+        # Check if user has already submitted a response
+        existing_response = TrackerResponse.objects.filter(user=user).first()
+        if existing_response:
+            return JsonResponse({'success': False, 'message': 'You have already submitted the tracker form'}, status=400)
+        
         tr = TrackerResponse.objects.create(user=user, answers=answers, submitted_at=timezone.now())
+        
+        # Create a thank you notification
+        Notification.objects.create(
+            user=user,
+            notif_type='CCICT',
+            subject='Thank You for Completing the Tracker Form',
+            notifi_content=f'Thank you {user.f_name} {user.l_name} for completing the alumni tracker form. Your response has been recorded successfully.',
+            notif_date=timezone.now()
+        )
+        
         return JsonResponse({'success': True, 'message': 'Response recorded', 'user_id': user.user_id})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
