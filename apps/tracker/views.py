@@ -33,6 +33,10 @@ def tracker_questions_view(request):
 def tracker_responses_view(request):
     from apps.shared.models import User
     responses = []
+    
+    # Get batch year from query parameter
+    batch_year = request.GET.get('batch_year')
+    
     # Define the basic user fields to merge
     basic_fields = {
         'First Name': 'f_name',
@@ -49,9 +53,29 @@ def tracker_responses_view(request):
         'Program Name': 'program',
         'Status': 'user_status',
     }
-    for resp in TrackerResponse.objects.select_related('user').all():
+    
+    # Filter responses by batch year if provided
+    tracker_responses = TrackerResponse.objects.select_related('user').prefetch_related('files').all()
+    if batch_year:
+        tracker_responses = tracker_responses.filter(user__year_graduated=batch_year)
+    
+    for resp in tracker_responses:
         user = resp.user
         merged_answers = resp.answers.copy() if resp.answers else {}
+        
+        # Add file information to answers
+        for file_upload in resp.files.all():
+            question_id_str = str(file_upload.question_id)
+            if question_id_str in merged_answers:
+                # If this question has a file upload, add file info
+                merged_answers[question_id_str] = {
+                    'type': 'file',
+                    'filename': file_upload.original_filename,
+                    'file_url': file_upload.file.url,
+                    'file_size': file_upload.file_size,
+                    'uploaded_at': file_upload.uploaded_at.strftime('%Y-%m-%d %H:%M:%S')
+                }
+        
         # Fill in missing basic fields from User model
         for label, field in basic_fields.items():
             if label not in merged_answers or merged_answers[label] in [None, '', 'No answer']:
@@ -226,14 +250,18 @@ def check_user_tracker_status_view(request):
 def submit_tracker_response_view(request):
     import json
     from django.utils import timezone
-    from apps.shared.models import TrackerResponse, User, Notification
+    from apps.shared.models import TrackerResponse, User, Notification, TrackerFileUpload
+    import os
 
     try:
-        data = json.loads(request.body)
-        user_id = data.get('user_id')
-        answers = data.get('answers')
-        if not user_id or not answers:
+        user_id = request.POST.get('user_id')
+        answers_json = request.POST.get('answers')
+        
+        if not user_id or not answers_json:
             return JsonResponse({'success': False, 'message': 'Missing user_id or answers'}, status=400)
+        
+        # Parse answers JSON
+        answers = json.loads(answers_json)
         user = User.objects.get(pk=user_id)
         
         # Check if user has already submitted a response
@@ -241,7 +269,37 @@ def submit_tracker_response_view(request):
         if existing_response:
             return JsonResponse({'success': False, 'message': 'You have already submitted the tracker form'}, status=400)
         
+        # Create the tracker response
         tr = TrackerResponse.objects.create(user=user, answers=answers, submitted_at=timezone.now())
+        
+        # Handle file uploads
+        uploaded_files = []
+        for question_id, answer in answers.items():
+            if isinstance(answer, dict) and answer.get('type') == 'file':
+                # This is a file upload answer
+                file_key = f'file_{question_id}'
+                if file_key in request.FILES:
+                    uploaded_file = request.FILES[file_key]
+                    
+                    # Validate file size (10MB limit)
+                    if uploaded_file.size > 10 * 1024 * 1024:  # 10MB
+                        return JsonResponse({'success': False, 'message': f'File {uploaded_file.name} is too large. Maximum size is 10MB.'}, status=400)
+                    
+                    # Validate file type
+                    allowed_extensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif']
+                    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+                    if file_extension not in allowed_extensions:
+                        return JsonResponse({'success': False, 'message': f'File type {file_extension} is not allowed. Allowed types: {", ".join(allowed_extensions)}'}, status=400)
+                    
+                    # Save the file
+                    file_upload = TrackerFileUpload.objects.create(
+                        response=tr,
+                        question_id=int(question_id),
+                        file=uploaded_file,
+                        original_filename=uploaded_file.name,
+                        file_size=uploaded_file.size
+                    )
+                    uploaded_files.append(file_upload)
         
         # Create a thank you notification
         Notification.objects.create(
@@ -252,6 +310,105 @@ def submit_tracker_response_view(request):
             notif_date=timezone.now()
         )
         
-        return JsonResponse({'success': True, 'message': 'Response recorded', 'user_id': user.user_id})
+        return JsonResponse({
+            'success': True, 
+            'message': 'Response recorded', 
+            'user_id': user.user_id,
+            'files_uploaded': len(uploaded_files)
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON in answers'}, status=400)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def tracker_accepting_responses_view(request, tracker_form_id):
+    try:
+        form = TrackerForm.objects.get(pk=tracker_form_id)
+        return JsonResponse({'success': True, 'accepting_responses': form.accepting_responses})
+    except TrackerForm.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'TrackerForm not found'}, status=404)
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def update_tracker_accepting_responses_view(request, tracker_form_id):
+    try:
+        form = TrackerForm.objects.get(pk=tracker_form_id)
+        data = json.loads(request.body)
+        accepting = data.get('accepting_responses')
+        if accepting is None:
+            return JsonResponse({'success': False, 'message': 'accepting_responses is required'}, status=400)
+        form.accepting_responses = bool(accepting)
+        form.save()
+        return JsonResponse({'success': True, 'accepting_responses': form.accepting_responses})
+    except TrackerForm.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'TrackerForm not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_active_tracker_form(request):
+    form = TrackerForm.objects.order_by('-tracker_form_id').first()  # or your own logic
+    if form:
+        return JsonResponse({'tracker_form_id': form.pk})
+    return JsonResponse({'tracker_form_id': None}, status=404)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def file_upload_stats_view(request):
+    """Get statistics about file uploads grouped by question type"""
+    try:
+        from apps.shared.models import TrackerFileUpload, Question
+        
+        # Get all file uploads with question information
+        file_uploads = TrackerFileUpload.objects.select_related('response__user').all()
+        
+        # Group by question
+        stats = {}
+        for upload in file_uploads:
+            question = Question.objects.filter(id=upload.question_id).first()
+            question_text = question.text if question else f"Question ID: {upload.question_id}"
+            
+            if question_text not in stats:
+                stats[question_text] = {
+                    'question_id': upload.question_id,
+                    'total_files': 0,
+                    'total_size_mb': 0,
+                    'users': set(),
+                    'files': []
+                }
+            
+            stats[question_text]['total_files'] += 1
+            stats[question_text]['total_size_mb'] += upload.file_size / 1024 / 1024
+            stats[question_text]['users'].add(upload.response.user.user_id)
+            stats[question_text]['files'].append({
+                'filename': upload.original_filename,
+                'user': f"{upload.response.user.f_name} {upload.response.user.l_name}",
+                'file_size_mb': round(upload.file_size / 1024 / 1024, 2),
+                'uploaded_at': upload.uploaded_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'file_url': upload.file.url
+            })
+        
+        # Convert sets to counts and format the response
+        formatted_stats = []
+        for question_text, data in stats.items():
+            formatted_stats.append({
+                'question_text': question_text,
+                'question_id': data['question_id'],
+                'total_files': data['total_files'],
+                'total_size_mb': round(data['total_size_mb'], 2),
+                'unique_users': len(data['users']),
+                'files': data['files']
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'stats': formatted_stats
+        })
+        
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)

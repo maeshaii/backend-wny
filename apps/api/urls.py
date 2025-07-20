@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view
-from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view
+from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view, tracker_accepting_responses_view, update_tracker_accepting_responses_view, get_active_tracker_form, file_upload_stats_view
 from apps.alumni_users.views import alumni_list_view, alumni_detail_view
 from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel
 
@@ -31,8 +31,13 @@ urlpatterns = [
     path('tracker/update-question/<int:question_id>/', update_question_view, name='update_question'),
     path('tracker/update-form-title/<int:tracker_form_id>/', update_tracker_form_title_view, name='update_tracker_form_title'),
     path('tracker/form/<int:tracker_form_id>/', tracker_form_view, name='tracker_form_view'),
+    path('tracker/file-stats/', file_upload_stats_view, name='file_upload_stats'),
     path('send-reminder/', send_reminder_view, name='send_reminder'),
     path('notifications/', notifications_view, name='notifications'),
     path('notifications/delete/', delete_notifications_view, name='delete_notifications'),
     path('alumni/<int:user_id>/', alumni_detail_view, name='alumni_detail'),
+    path('tracker/accepting/<int:tracker_form_id>/', tracker_accepting_responses_view, name='tracker_accepting_responses'),
+    path('tracker/update-accepting/<int:tracker_form_id>/', update_tracker_accepting_responses_view, name='update_tracker_accepting_responses'),
+    path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
 ]
+
