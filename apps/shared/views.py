@@ -2,6 +2,10 @@ from django.shortcuts import render
 import pandas as pd
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.conf import settings
+from django.http import JsonResponse
+import os
 from .models import User, TrackerResponse, Question
 from io import BytesIO
 import logging
