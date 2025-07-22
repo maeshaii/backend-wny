@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view
