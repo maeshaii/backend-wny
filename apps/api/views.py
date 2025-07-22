@@ -2,7 +2,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse
+from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse, OJTData, OJTImport
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -418,5 +418,239 @@ def delete_notifications_view(request):
         from apps.shared.models import Notification
         deleted, _ = Notification.objects.filter(notification_id__in=notif_ids).delete()
         return JsonResponse({'success': True, 'deleted': deleted})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+# OJT-specific import function for coordinators
+@csrf_exempt
+@require_http_methods(["POST", "OPTIONS"])
+def import_ojt_view(request):
+    print("IMPORT OJT VIEW CALLED")  # Debug print
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken"
+        return response
+
+    try:
+        if 'file' not in request.FILES:
+            return JsonResponse({'success': False, 'message': 'No file uploaded'}, status=400)
+        
+        file = request.FILES['file']
+        batch_year = request.POST.get('batch_year', '')
+        course = request.POST.get('course', '')
+        coordinator_username = request.POST.get('coordinator_username', '')
+        
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return JsonResponse({'success': False, 'message': 'Please upload an Excel file (.xlsx or .xls)'}, status=400)
+        
+        if not batch_year or not course or not coordinator_username:
+            return JsonResponse({'success': False, 'message': 'Batch year, course, and coordinator username are required'}, status=400)
+        
+        # Read Excel file
+        try:
+            df = pd.read_excel(file)
+            print('OJT IMPORT - HEADERS:', list(df.columns))
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f'Error reading Excel file: {str(e)}'}, status=400)
+        
+        # OJT-specific required columns
+        required_columns = ['CTU_ID', 'First_Name', 'Last_Name', 'Gender', 'Birthdate']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            return JsonResponse({
+                'success': False,
+                'message': f'Missing required OJT columns: {", ".join(missing_columns)}'
+            }, status=400)
+        # OJT_Company and OJT_Position are now optional
+        
+        # Create import record
+        import_record = OJTImport.objects.create(
+            coordinator=coordinator_username,
+            batch_year=batch_year,
+            course=course,
+            file_name=file.name
+        )
+        
+        created_count = 0
+        skipped_count = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            print(f"--- Processing Row {index+2} ---")
+            try:
+                # --- Field Extraction and Cleaning ---
+                ctu_id = str(row.get('CTU_ID', '')).strip()
+                first_name = str(row.get('First_Name', '')).strip()
+                middle_name = str(row.get('Middle_Name', '')).strip() if pd.notna(row.get('Middle_Name')) else ''
+                last_name = str(row.get('Last_Name', '')).strip()
+                gender = str(row.get('Gender', '')).strip().upper()
+                
+                # --- Birthdate Parsing ---
+                birthdate = None
+                birthdate_raw = row.get('Birthdate')
+                print(f"Row {index+2} - Raw Birthdate: '{birthdate_raw}', Type: {type(birthdate_raw)}")
+                if pd.notna(birthdate_raw):
+                    try:
+                        # This robustly handles Timestamps, datetime objects, and various string formats
+                        dt_object = pd.to_datetime(birthdate_raw)
+                        birthdate = dt_object.date()
+                        print(f"Row {index+2} - Parsed birthdate successfully: {birthdate}")
+                    except Exception as e:
+                        print(f"Row {index+2} - FAILED to parse birthdate. Error: {e}")
+                        birthdate = None
+                
+                # --- Validation Check ---
+                required_data = {
+                    "CTU_ID": ctu_id,
+                    "First_Name": first_name,
+                    "Last_Name": last_name,
+                    "Gender": gender,
+                    "Birthdate": birthdate
+                }
+                missing_fields = [key for key, value in required_data.items() if not value]
+
+                if missing_fields:
+                    error_msg = f"Row {index + 2}: Missing or invalid required fields - {', '.join(missing_fields)}"
+                    print(f"SKIPPING: {error_msg}")
+                    errors.append(error_msg)
+                    skipped_count += 1
+                    continue
+                
+                # --- Gender Validation ---
+                if gender not in ['M', 'F']:
+                    error_msg = f"Row {index + 2}: Gender must be 'M' or 'F', but was '{gender}'"
+                    print(f"SKIPPING: {error_msg}")
+                    errors.append(error_msg)
+                    skipped_count += 1
+                    continue
+                
+                # Check if OJT record already exists
+                if OJTData.objects.filter(ctu_id=ctu_id).exists():
+                    error_msg = f"Row {index + 2}: CTU ID {ctu_id} already exists in OJT data"
+                    print(f"SKIPPING: {error_msg}")
+                    errors.append(error_msg)
+                    skipped_count += 1
+                    continue
+                
+                # --- Create OJT record ---
+                ojt_data = OJTData.objects.create(
+                    ctu_id=ctu_id,
+                    first_name=first_name,
+                    middle_name=middle_name,
+                    last_name=last_name,
+                    gender=gender,
+                    birthdate=birthdate,
+                    phone_number=str(row.get('Phone_Number', '')).strip() if pd.notna(row.get('Phone_Number')) else '',
+                    address=str(row.get('Address', '')).strip() if pd.notna(row.get('Address')) else '',
+                    civil_status=str(row.get('Civil_Status', '')).strip() if pd.notna(row.get('Civil_Status')) else '',
+                    social_media=str(row.get('Social_Media', '')).strip() if pd.notna(row.get('Social_Media')) else '',
+                    ojt_company = str(row.get('OJT_Company', '')).strip() if pd.notna(row.get('OJT_Company')) else '',
+                    ojt_position = str(row.get('OJT_Position', '')).strip() if pd.notna(row.get('OJT_Position')) else '',
+                    ojt_start_date = row.get('OJT_Start_Date') if pd.notna(row.get('OJT_Start_Date')) else None,
+                    ojt_end_date = row.get('OJT_End_Date') if pd.notna(row.get('OJT_End_Date')) else None,
+                    ojt_supervisor = str(row.get('OJT_Supervisor', '')).strip() if pd.notna(row.get('OJT_Supervisor')) else '',
+                    ojt_performance_rating = str(row.get('OJT_Performance_Rating', '')).strip() if pd.notna(row.get('OJT_Performance_Rating')) else '',
+                    ojt_status = str(row.get('OJT_Status', 'Pending')).strip() if pd.notna(row.get('OJT_Status')) else 'Pending',
+                    ojt_remarks=str(row.get('OJT_Remarks', '')).strip() if pd.notna(row.get('OJT_Remarks')) else '',
+                    imported_by=coordinator_username,
+                    batch_year=batch_year,
+                    course=course
+                )
+                
+                print(f"SUCCESS: Created OJT record for CTU_ID {ctu_id}")
+                created_count += 1
+                
+            except Exception as e:
+                error_msg = f"Row {index + 2}: An unexpected error occurred - {str(e)}"
+                print(f"ERROR: {error_msg}")
+                errors.append(error_msg)
+                skipped_count += 1
+                continue
+        
+        # Update import record
+        import_record.records_imported = created_count
+        if errors:
+            import_record.status = 'Partial' if created_count > 0 else 'Failed'
+        import_record.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'OJT import completed. Created: {created_count}, Skipped: {skipped_count}',
+            'created_count': created_count,
+            'skipped_count': skipped_count,
+            'errors': errors[:10]  # Limit errors to first 10
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Import failed: {str(e)}'}, status=500)
+
+# OJT statistics for coordinators
+@csrf_exempt
+@require_http_methods(["GET"])
+def ojt_statistics_view(request):
+    try:
+        coordinator_username = request.GET.get('coordinator', '')
+        
+        # Get OJT data for this coordinator only
+        ojt_data = OJTData.objects.all()
+        if coordinator_username:
+            ojt_data = ojt_data.filter(imported_by=coordinator_username)
+        
+        # Group by batch year
+        years_data = {}
+        for ojt in ojt_data:
+            year = ojt.batch_year
+            if year not in years_data:
+                years_data[year] = 0
+            years_data[year] += 1
+        
+        # Convert to list format
+        years_list = [{'year': year, 'count': count} for year, count in years_data.items()]
+        years_list.sort(key=lambda x: x['year'], reverse=True)
+        
+        return JsonResponse({
+            'success': True,
+            'years': years_list,
+            'total_records': ojt_data.count()
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+# OJT data by year for coordinators
+@csrf_exempt
+@require_http_methods(["GET"])
+def ojt_by_year_view(request):
+    try:
+        year = request.GET.get('year', '')
+        coordinator_username = request.GET.get('coordinator', '')
+        
+        if not year:
+            return JsonResponse({'success': False, 'message': 'Year parameter is required'}, status=400)
+        
+        ojt_data = OJTData.objects.filter(batch_year=year)
+        if coordinator_username:
+            ojt_data = ojt_data.filter(imported_by=coordinator_username)
+        
+        ojt_list = []
+        for ojt in ojt_data:
+            ojt_list.append({
+                'id': ojt.ojt_id,
+                'ctu_id': ojt.ctu_id,
+                'name': f"{ojt.first_name} {ojt.last_name}",
+                'course': ojt.course,
+                'ojt_company': ojt.ojt_company,
+                'ojt_position': ojt.ojt_position,
+                'ojt_status': ojt.ojt_status,
+                'ojt_performance_rating': ojt.ojt_performance_rating
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'ojt_data': ojt_list
+        })
+        
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)

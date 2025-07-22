@@ -203,3 +203,44 @@ class TrackerResponse(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     answers = models.JSONField()  # {question_id: answer}
     submitted_at = models.DateTimeField(auto_now_add=True)
+
+# OJT-specific models
+class OJTData(models.Model):
+    ojt_id = models.AutoField(primary_key=True)
+    ctu_id = models.CharField(max_length=100, unique=True)
+    first_name = models.CharField(max_length=100)
+    middle_name = models.CharField(max_length=100, null=True, blank=True)
+    last_name = models.CharField(max_length=100)
+    gender = models.CharField(max_length=10)
+    birthdate = models.DateField()
+    phone_number = models.CharField(max_length=20, null=True, blank=True)
+    address = models.TextField(null=True, blank=True)
+    civil_status = models.CharField(max_length=50, null=True, blank=True)
+    social_media = models.CharField(max_length=255, null=True, blank=True)
+    
+    # OJT-specific fields
+    ojt_company = models.CharField(max_length=255, null=True, blank=True)
+    ojt_position = models.CharField(max_length=255, null=True, blank=True)
+    ojt_start_date = models.DateField(null=True, blank=True)
+    ojt_end_date = models.DateField(null=True, blank=True)
+    ojt_supervisor = models.CharField(max_length=255, null=True, blank=True)
+    ojt_performance_rating = models.CharField(max_length=50, null=True, blank=True)
+    ojt_certificate = models.CharField(max_length=255, null=True, blank=True)
+    ojt_status = models.CharField(max_length=50, default='Pending')  # Pending, Completed, Failed
+    ojt_remarks = models.TextField(null=True, blank=True)
+    
+    # Import tracking
+    imported_by = models.CharField(max_length=100, null=True, blank=True)  # Coordinator username
+    import_date = models.DateTimeField(auto_now_add=True)
+    batch_year = models.IntegerField(null=True, blank=True)
+    course = models.CharField(max_length=100, null=True, blank=True)
+
+class OJTImport(models.Model):
+    import_id = models.AutoField(primary_key=True)
+    coordinator = models.CharField(max_length=100)  # Coordinator who imported
+    batch_year = models.IntegerField()
+    course = models.CharField(max_length=100)
+    import_date = models.DateTimeField(auto_now_add=True)
+    file_name = models.CharField(max_length=255)
+    records_imported = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, default='Completed')  # Completed, Failed, Partial
