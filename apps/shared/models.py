@@ -135,9 +135,10 @@ class Suc(models.Model):
 
 class TrackerForm(models.Model):
     tracker_form_id = models.AutoField(primary_key=True)
-    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms')
+    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms', null=True, blank=True)
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='tracker_forms')
     title = models.CharField(max_length=255, blank=True, null=True)  # Added title field
+    accepting_responses = models.BooleanField(default=True)  # Controls if alumni can submit
 
 class User(models.Model):
     user_id = models.AutoField(primary_key=True)
@@ -203,3 +204,14 @@ class TrackerResponse(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     answers = models.JSONField()  # {question_id: answer}
     submitted_at = models.DateTimeField(auto_now_add=True)
+
+class TrackerFileUpload(models.Model):
+    response = models.ForeignKey(TrackerResponse, on_delete=models.CASCADE, related_name='files')
+    question_id = models.IntegerField()  # ID of the question this file answers
+    file = models.FileField(upload_to='tracker_uploads/')
+    original_filename = models.CharField(max_length=255)
+    file_size = models.IntegerField()  # File size in bytes
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.original_filename} - {self.response.user.f_name} {self.response.user.l_name}"
