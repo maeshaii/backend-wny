@@ -17,6 +17,10 @@ from apps.shared.models import Question
 from django.core.mail import send_mail
 from django.utils import timezone
 from apps.shared.models import Notification, User
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -420,3 +424,16 @@ def delete_notifications_view(request):
         return JsonResponse({'success': True, 'deleted': deleted})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    user = request.user
+    bio = request.data.get('bio')
+    profile_pic = request.data.get('profile_pic')
+    if bio is not None:
+        user.profile_bio = bio
+    if profile_pic is not None:
+        user.profile_pic = profile_pic  # This should be a URL or handle file upload
+    user.save()
+    return Response({'success': True, 'bio': user.profile_bio, 'profile_pic': user.profile_pic}, status=status.HTTP_200_OK)
