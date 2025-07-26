@@ -167,7 +167,7 @@ def import_exported_alumni_excel(request):
                 'Age': 'age',
                 'Email': 'email',
                 'Program_Name': 'program',
-                'Status': 'user_status',
+                'Status': 'status',
                 'Company name current': 'company_name_current',
                 'Position current': 'position_current',
                 'Sector current': 'sector_current',
