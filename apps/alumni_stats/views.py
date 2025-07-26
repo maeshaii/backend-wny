@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from apps.shared.models import User, TrackerResponse, Question, Standard, Suc, Qpro, Ched, Aacup
+from apps.shared.models import User, TrackerResponse, Question
 from collections import Counter
 from django.db import models
 from statistics import mean
@@ -66,28 +66,42 @@ def generate_statistics_view(request):
     course = request.GET.get('course', 'ALL')
     stats_type = request.GET.get('type', 'ALL')
     
-    # Helper to get Standard record by year and course
-    def get_standard():
-        qs = Standard.objects.all()
-        if year and year != 'ALL':
-            qs = qs.filter(tracker_form__user__year_graduated=year)
-        if course and course != 'ALL':
-            qs = qs.filter(tracker_form__user__course=course)
-        return qs.order_by('-standard_id').first()
-
-    # Get alumni queryset for count and dynamic fields
     alumni_qs = User.objects.filter(account_type__user=True)
+    
     if year and year != 'ALL':
         alumni_qs = alumni_qs.filter(year_graduated=year)
     if course and course != 'ALL':
         alumni_qs = alumni_qs.filter(course=course)
+    
     total_alumni = alumni_qs.count()
     
-    if stats_type == 'QPRO':
-        std = get_standard()
-        qpro = std.qpro if std and std.qpro else None
-        employed = alumni_qs.filter(user_status__iexact='employed').count()
-        unemployed = alumni_qs.filter(user_status__iexact='unemployed').count()
+    if stats_type == 'ALL':
+        # Return all employment status counts and professional aggregates
+        status_counts = Counter(alumni_qs.values_list('user_status', flat=True))
+        # Professional aggregates
+        return JsonResponse({
+            'success': True,
+            'type': 'ALL',
+            'total_alumni': total_alumni,
+            'status_counts': dict(status_counts),
+            'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
+            'most_common_position': safe_mode(alumni_qs, 'position_current'),
+            'most_common_sector': safe_mode(alumni_qs, 'sector_current'),
+            'average_salary': safe_mean(alumni_qs, 'salary_current'),
+            'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
+            'most_common_school': safe_mode(alumni_qs, 'school_name'),
+            'most_common_unemployment_reason': safe_mode(alumni_qs, 'unemployment_reason'),
+            'most_common_civil_status': safe_mode(alumni_qs, 'civil_status'),
+            'average_age': safe_mean(alumni_qs, 'age'),
+            'sample_email': safe_sample(alumni_qs, 'email'),
+            'year': year,
+            'course': course
+        })
+    
+    elif stats_type == 'QPRO':
+        # QPRO: Employment statistics based on real data fields
+        employed = alumni_qs.filter(user_status__iexact='employed').count()  # user_status == 'employed'
+        unemployed = alumni_qs.filter(user_status__iexact='unemployed').count()  # user_status == 'unemployed'
         employment_rate = (employed / total_alumni * 100) if total_alumni > 0 else 0
         return JsonResponse({
             'success': True,
@@ -96,55 +110,74 @@ def generate_statistics_view(request):
             'employment_rate': round(employment_rate, 2),
             'employed_count': employed,
             'unemployed_count': unemployed,
-            'further_study_count': qpro.further_study_count if qpro else 0,
+            # Real data fields
+            'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
+            'most_common_position': safe_mode(alumni_qs, 'position_current'),
+            'most_common_sector': safe_mode(alumni_qs, 'sector_current'),
+            'average_salary': safe_mean(alumni_qs, 'salary_current'),
+            'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
+            'most_common_unemployment_reason': safe_mode(alumni_qs, 'unemployment_reason'),
+            'most_common_civil_status': safe_mode(alumni_qs, 'civil_status'),
+            'average_age': safe_mean(alumni_qs, 'age'),
+            'sample_email': safe_sample(alumni_qs, 'email'),
             'year': year,
             'course': course
         })
+    
     elif stats_type == 'CHED':
-        std = get_standard()
-        ched = std.ched if std and std.ched else None
-        pursuing_study = alumni_qs.filter(pursue_further_study__iexact='yes').count()
-        post_graduate_degree = alumni_qs.filter(program__icontains='graduate').count()
-        further_study_rate = (pursuing_study / total_alumni * 100) if total_alumni > 0 else 0
+        # CHED: Further study statistics based on real data fields
+        pursuing_study = alumni_qs.filter(pursue_further_study__iexact='yes').count()  # pursue_further_study == 'yes'
+        # Aggregate job_alignment_count from Ched model
+        from apps.shared.models import Standard, Ched
+        ched_count = 0
+        # Get all Ched records and sum their job_alignment_count
+        ched_records = Ched.objects.all()
+        for ched in ched_records:
+            ched_count += getattr(ched, 'job_alignment_count', 0)
         return JsonResponse({
             'success': True,
             'type': 'CHED',
             'total_alumni': total_alumni,
             'pursuing_further_study': pursuing_study,
-            'post_graduate_degree': post_graduate_degree,
-            'further_study_rate': round(further_study_rate, 2),
-            'awards_count': ched.awards_count if ched else 0,
-            'gov_position_count': ched.gov_position_count if ched else 0,
-            'job_alignment_count': ched.job_alignment_count if ched and ched.job_alignment_count is not None else 0,
-            'self_employed_count': ched.self_employed_count if ched and ched.self_employed_count is not None else 0,
+            'post_graduate_degree': alumni_qs.filter(program__icontains='graduate').count(),  # program contains 'graduate'
+            'further_study_rate': round((pursuing_study / total_alumni * 100), 2) if total_alumni > 0 else 0,
+            'job_alignment_count': ched_count,
+            'most_common_school': safe_mode(alumni_qs, 'school_name'),
+            'most_common_program': safe_mode(alumni_qs, 'program'),
+            'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
+            'most_common_civil_status': safe_mode(alumni_qs, 'civil_status'),
+            'average_age': safe_mean(alumni_qs, 'age'),
+            'sample_email': safe_sample(alumni_qs, 'email'),
             'year': year,
             'course': course
         })
+    
     elif stats_type == 'SUC':
-        std = get_standard()
-        suc = std.suc if std and std.suc else None
-        high_position = alumni_qs.filter(user_status__iexact='high position').count()
-        average_salary = suc.average_salary if suc else 0
-        other_positions = total_alumni - high_position
+        # SUC: High position and salary statistics based on real data fields
+        high_position = alumni_qs.filter(user_status__iexact='high position').count()  # user_status == 'high position'
         return JsonResponse({
             'success': True,
             'type': 'SUC',
             'total_alumni': total_alumni,
             'high_position_count': high_position,
-            'other_positions': other_positions,
-            'average_salary': average_salary,
-            'job_alignment_count': suc.job_alignment_count if suc else 0,
-            'employment_status_count': suc.employment_status_count if suc else 0,
-            'self_employed_count': suc.self_employed_count if suc else 0,
+            'high_position_rate': round((high_position / total_alumni * 100), 2) if total_alumni > 0 else 0,
+            'average_salary': safe_mean(alumni_qs, 'salary_current'),
+            'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
+            'most_common_position': safe_mode(alumni_qs, 'position_current'),
+            'most_common_sector': safe_mode(alumni_qs, 'sector_current'),
+            'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
+            'most_common_civil_status': safe_mode(alumni_qs, 'civil_status'),
+            'average_age': safe_mean(alumni_qs, 'age'),
+            'sample_email': safe_sample(alumni_qs, 'email'),
             'year': year,
             'course': course
         })
+    
     elif stats_type == 'AACUP':
-        std = get_standard()
-        aacup = std.aacup if std and std.aacup else None
-        employed = alumni_qs.filter(user_status__iexact='employed').count()
-        absorbed = alumni_qs.filter(user_status__iexact='absorb').count()
-        high_position = alumni_qs.filter(user_status__iexact='high position').count()
+        # AACUP: Absorbed, employed, high position statistics based on real data fields
+        employed = alumni_qs.filter(user_status__iexact='employed').count()  # user_status == 'employed'
+        absorbed = alumni_qs.filter(user_status__iexact='absorb').count()  # user_status == 'absorb'
+        high_position = alumni_qs.filter(user_status__iexact='high position').count()  # user_status == 'high position'
         employment_rate = (employed / total_alumni * 100) if total_alumni > 0 else 0
         absorption_rate = (absorbed / total_alumni * 100) if total_alumni > 0 else 0
         high_position_rate = (high_position / total_alumni * 100) if total_alumni > 0 else 0
@@ -152,12 +185,21 @@ def generate_statistics_view(request):
             'success': True,
             'type': 'AACUP',
             'total_alumni': total_alumni,
-            'employed_count': employed,
-            'absorbed_count': absorbed,
-            'high_position_count': high_position,
             'employment_rate': round(employment_rate, 2),
             'absorption_rate': round(absorption_rate, 2),
             'high_position_rate': round(high_position_rate, 2),
+            'employed_count': employed,
+            'absorbed_count': absorbed,
+            'high_position_count': high_position,
+            'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
+            'most_common_position': safe_mode(alumni_qs, 'position_current'),
+            'most_common_sector': safe_mode(alumni_qs, 'sector_current'),
+            'average_salary': safe_mean(alumni_qs, 'salary_current'),
+            'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
+            'most_common_school': safe_mode(alumni_qs, 'school_name'),
+            'most_common_civil_status': safe_mode(alumni_qs, 'civil_status'),
+            'average_age': safe_mean(alumni_qs, 'age'),
+            'sample_email': safe_sample(alumni_qs, 'email'),
             'year': year,
             'course': course
         })
