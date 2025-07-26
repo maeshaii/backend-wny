@@ -6,6 +6,9 @@ class AccountType(models.Model):
     peso = models.BooleanField()
     user = models.BooleanField()
     coordinator = models.BooleanField()
+    ojt = models.BooleanField(default=False)  # Added for OJT account type with default
+
+
 
 class Aacup(models.Model):
     aacup_id = models.AutoField(primary_key=True)
@@ -180,6 +183,7 @@ class User(models.Model):
     date_started = models.DateField(null=True, blank=True)
     school_name = models.CharField(max_length=255, null=True, blank=True)
     job_code = models.CharField(max_length=20, null=True, blank=True)
+    ojtstatus = models.CharField(max_length=50, null=True, blank=True)
     USERNAME_FIELD = 'acc_username'
     REQUIRED_FIELDS = []
 
@@ -207,6 +211,16 @@ class TrackerResponse(models.Model):
     answers = models.JSONField()  # {question_id: answer}
     submitted_at = models.DateTimeField(auto_now_add=True)
 
+# OJT-specific models
+class OJTImport(models.Model):
+    import_id = models.AutoField(primary_key=True)
+    coordinator = models.CharField(max_length=100)  # Coordinator who imported
+    batch_year = models.IntegerField()
+    course = models.CharField(max_length=100)
+    import_date = models.DateTimeField(auto_now_add=True)
+    file_name = models.CharField(max_length=255)
+    records_imported = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, default='Completed')  # Completed, Failed, Partial
 class TrackerFileUpload(models.Model):
     response = models.ForeignKey(TrackerResponse, on_delete=models.CASCADE, related_name='files')
     question_id = models.IntegerField()  # ID of the question this file answers

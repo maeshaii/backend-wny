@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.tracker",
     "apps.alumni_stats",
     "apps.alumni_users",
+    "apps.ojt_users",
     "rest_framework",
     "corsheaders",
 ]
