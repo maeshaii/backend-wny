@@ -13,10 +13,24 @@ class AccountType(models.Model):
 class Aacup(models.Model):
     aacup_id = models.AutoField(primary_key=True)
     standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='aacups')
+    # Aggregate fields
+    high_position_count = models.IntegerField(default=0)
+    awards_count = models.IntegerField(default=0)
+    self_employed_count = models.IntegerField(default=0)
+    entrepreneurship_count = models.IntegerField(default=0)
 
 class Ched(models.Model):
     ched_id = models.AutoField(primary_key=True)
     standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='cheds')
+    # Aggregate fields
+    awards_count = models.IntegerField(default=0)
+    gov_position_count = models.IntegerField(default=0)
+    further_study_count = models.IntegerField(default=0)
+    self_employed_count = models.IntegerField(default=0)
+    job_alignment_count = models.IntegerField(default=0)
+    info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='ched_infotechjobs', null=True, blank=True)
+    info_system_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='ched_infosystemjobs', null=True, blank=True)
+    comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='ched_comptechjobs', null=True, blank=True)
 
 class Comment(models.Model):
     comment_id = models.AutoField(primary_key=True)
@@ -114,6 +128,11 @@ class Post(models.Model):
 class Qpro(models.Model):
     qpro_id = models.AutoField(primary_key=True)
     standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='qpros')
+    # Aggregate fields
+    further_study_count = models.IntegerField(default=0)
+    employed_count = models.IntegerField(default=0)
+    unemployed_count = models.IntegerField(default=0)
+    current_position = models.CharField(max_length=255, null=True, blank=True)
 
 class Repost(models.Model):
     repost_id = models.AutoField(primary_key=True)
@@ -135,6 +154,12 @@ class Suc(models.Model):
     info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='suc_infotechjobs')
     info_system_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='suc_infosystemjobs')
     comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='suc_comptechjobs')
+    # Aggregate fields
+    average_salary = models.FloatField(null=True, blank=True)
+    job_alignment_count = models.IntegerField(default=0)
+    employment_status_count = models.IntegerField(default=0)
+    self_employed_count = models.IntegerField(default=0)
+    further_study_count = models.IntegerField(default=0)
 
 class TrackerForm(models.Model):
     tracker_form_id = models.AutoField(primary_key=True)
@@ -169,7 +194,6 @@ class User(models.Model):
     age = models.IntegerField(null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
     program = models.CharField(max_length=100, null=True, blank=True)
-    status = models.CharField(max_length=50, null=True, blank=True)
     company_name_current = models.CharField(max_length=255, null=True, blank=True)
     position_current = models.CharField(max_length=255, null=True, blank=True)
     sector_current = models.CharField(max_length=255, null=True, blank=True)
@@ -197,6 +221,7 @@ class User(models.Model):
 class QuestionCategory(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    order = models.PositiveIntegerField(default=0)  # Added for ordering
 
 class Question(models.Model):
     category = models.ForeignKey(QuestionCategory, related_name='questions', on_delete=models.CASCADE)
