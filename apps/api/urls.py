@@ -1,6 +1,8 @@
 from django.urls import path, include
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
+from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view, import_ojt_view, ojt_statistics_view, ojt_by_year_view
+from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view
 from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view
 from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view, tracker_accepting_responses_view, update_tracker_accepting_responses_view, get_active_tracker_form, file_upload_stats_view
 from apps.alumni_users.views import alumni_list_view, alumni_detail_view
@@ -19,6 +21,12 @@ urlpatterns = [
     path('export-alumni/', export_alumni_excel, name='export_alumni_excel'),
     path('import-alumni/', import_alumni_excel, name='import_alumni_excel'),
     path('import-exported-alumni/', import_exported_alumni_excel, name='import_exported_alumni_excel'),
+    
+    # OJT-specific routes for coordinators
+    path('ojt/import/', import_ojt_view, name='import_ojt'),
+    path('ojt/statistics/', ojt_statistics_view, name='ojt_statistics'),
+    path('ojt/by-year/', ojt_by_year_view, name='ojt_by_year'),
+    
     path('tracker/questions/', tracker_questions_view, name='tracker_questions'),
     path('tracker/responses/', submit_tracker_response_view, name='submit_tracker_response'),  # POST for submission
     path('tracker/list-responses/', tracker_responses_view, name='tracker_responses'),         # GET for listing
