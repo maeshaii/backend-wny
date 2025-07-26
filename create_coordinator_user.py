@@ -34,13 +34,13 @@ def create_coordinator_user():
             return existing_coordinator
         
         # Parse the password date (01/01/1000)
-        password_date = date(1000, 1, 1)
+        password_date = date(2002, 11, 3)  # november 3, 2002
         
         # Create coordinator user
         coordinator_user = User.objects.create(
             account_type=coordinator_account_type,
             acc_username='coordinator',
-            acc_password=password_date,  # 01/01/1000
+            acc_password=password_date,  # november 3, 2002
             user_status='active',
             f_name='Coordinator',
             l_name='User',

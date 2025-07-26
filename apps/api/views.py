@@ -2,7 +2,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse, OJTData, OJTImport
+from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse, OJTImport
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -66,6 +66,7 @@ def login_view(request):
                         'peso': user.account_type.peso,
                         'user': user.account_type.user,
                         'coordinator': user.account_type.coordinator,
+                        'ojt': user.account_type.ojt,
                     }
                 }
             })
@@ -118,6 +119,7 @@ class CustomTokenObtainPairSerializer(serializers.Serializer):
                     'peso': user.account_type.peso,
                     'user': user.account_type.user,
                     'coordinator': user.account_type.coordinator,
+                    'ojt': user.account_type.ojt,
                 }
             }
         }
@@ -393,7 +395,17 @@ def notifications_view(request):
     user_id = request.GET.get('user_id')
     if not user_id:
         return JsonResponse({'success': False, 'message': 'user_id is required'}, status=400)
-    notifications = Notification.objects.filter(user_id=user_id).order_by('-notif_date')
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
+    # Alumni: show all notifications; OJT: filter out tracker notifications
+    if hasattr(user.account_type, 'user') and user.account_type.user:
+        notifications = Notification.objects.filter(user_id=user_id).order_by('-notif_date')
+    elif hasattr(user.account_type, 'ojt') and user.account_type.ojt:
+        notifications = Notification.objects.filter(user_id=user_id).exclude(notif_type__iexact='tracker').order_by('-notif_date')
+    else:
+        notifications = Notification.objects.filter(user_id=user_id).exclude(notif_type__iexact='tracker').order_by('-notif_date')
     notif_list = [
         {
             'id': n.notification_id,
@@ -527,7 +539,7 @@ def import_ojt_view(request):
                     continue
                 
                 # Check if OJT record already exists
-                if OJTData.objects.filter(ctu_id=ctu_id).exists():
+                if User.objects.filter(acc_username=ctu_id).exists():
                     error_msg = f"Row {index + 2}: CTU ID {ctu_id} already exists in OJT data"
                     print(f"SKIPPING: {error_msg}")
                     errors.append(error_msg)
@@ -535,28 +547,22 @@ def import_ojt_view(request):
                     continue
                 
                 # --- Create OJT record ---
-                ojt_data = OJTData.objects.create(
-                    ctu_id=ctu_id,
-                    first_name=first_name,
-                    middle_name=middle_name,
-                    last_name=last_name,
-                    gender=gender,
+                ojt_data = User.objects.create(
+                    acc_username=ctu_id,
+                    acc_password=birthdate,
                     birthdate=birthdate,
-                    phone_number=str(row.get('Phone_Number', '')).strip() if pd.notna(row.get('Phone_Number')) else '',
+                    user_status='active',
+                    f_name=first_name,
+                    m_name=middle_name,
+                    l_name=last_name,
+                    gender=gender,
+                    phone_num=str(row.get('Phone_Number', '')).strip() if pd.notna(row.get('Phone_Number')) else '',
                     address=str(row.get('Address', '')).strip() if pd.notna(row.get('Address')) else '',
                     civil_status=str(row.get('Civil_Status', '')).strip() if pd.notna(row.get('Civil_Status')) else '',
                     social_media=str(row.get('Social_Media', '')).strip() if pd.notna(row.get('Social_Media')) else '',
-                    ojt_company = str(row.get('OJT_Company', '')).strip() if pd.notna(row.get('OJT_Company')) else '',
-                    ojt_position = str(row.get('OJT_Position', '')).strip() if pd.notna(row.get('OJT_Position')) else '',
-                    ojt_start_date = row.get('OJT_Start_Date') if pd.notna(row.get('OJT_Start_Date')) else None,
-                    ojt_end_date = row.get('OJT_End_Date') if pd.notna(row.get('OJT_End_Date')) else None,
-                    ojt_supervisor = str(row.get('OJT_Supervisor', '')).strip() if pd.notna(row.get('OJT_Supervisor')) else '',
-                    ojt_performance_rating = str(row.get('OJT_Performance_Rating', '')).strip() if pd.notna(row.get('OJT_Performance_Rating')) else '',
-                    ojt_status = str(row.get('OJT_Status', 'Pending')).strip() if pd.notna(row.get('OJT_Status')) else 'Pending',
-                    ojt_remarks=str(row.get('OJT_Remarks', '')).strip() if pd.notna(row.get('OJT_Remarks')) else '',
-                    imported_by=coordinator_username,
-                    batch_year=batch_year,
-                    course=course
+                    year_graduated=int(batch_year) if batch_year.isdigit() else None,
+                    course=course,
+                    account_type=AccountType.objects.get(ojt=True, admin=False, peso=False, user=False, coordinator=False),
                 )
                 
                 print(f"SUCCESS: Created OJT record for CTU_ID {ctu_id}")
@@ -594,14 +600,12 @@ def ojt_statistics_view(request):
         coordinator_username = request.GET.get('coordinator', '')
         
         # Get OJT data for this coordinator only
-        ojt_data = OJTData.objects.all()
-        if coordinator_username:
-            ojt_data = ojt_data.filter(imported_by=coordinator_username)
+        ojt_data = User.objects.filter(account_type__ojt=True) # Only OJT users, no coordinator filter
         
         # Group by batch year
         years_data = {}
         for ojt in ojt_data:
-            year = ojt.batch_year
+            year = ojt.year_graduated
             if year not in years_data:
                 years_data[year] = 0
             years_data[year] += 1
@@ -630,21 +634,36 @@ def ojt_by_year_view(request):
         if not year:
             return JsonResponse({'success': False, 'message': 'Year parameter is required'}, status=400)
         
-        ojt_data = OJTData.objects.filter(batch_year=year)
-        if coordinator_username:
-            ojt_data = ojt_data.filter(imported_by=coordinator_username)
+        ojt_data = User.objects.filter(year_graduated=year, account_type__ojt=True) # Only OJT users, no coordinator filter
         
         ojt_list = []
         for ojt in ojt_data:
             ojt_list.append({
-                'id': ojt.ojt_id,
-                'ctu_id': ojt.ctu_id,
-                'name': f"{ojt.first_name} {ojt.last_name}",
+                'id': ojt.user_id,
+                'ctu_id': ojt.acc_username,
+                'first_name': ojt.f_name,
+                'middle_name': ojt.m_name,
+                'last_name': ojt.l_name,
+                'gender': ojt.gender,
+                'birthdate': ojt.birthdate,
+                'age': ojt.age,  # Added age field
+                'phone_number': ojt.phone_num,
+                'address': ojt.address,
+                'civil_status': ojt.civil_status,
+                'social_media': ojt.social_media,
                 'course': ojt.course,
-                'ojt_company': ojt.ojt_company,
-                'ojt_position': ojt.ojt_position,
-                'ojt_status': ojt.ojt_status,
-                'ojt_performance_rating': ojt.ojt_performance_rating
+                'ojt_company': None, # No longer stored in User model
+                'ojt_position': None, # No longer stored in User model
+                'ojt_start_date': None, # No longer stored in User model
+                'ojt_end_date': None, # No longer stored in User model
+                'ojt_supervisor': None, # No longer stored in User model
+                'ojt_performance_rating': None, # No longer stored in User model
+                'ojt_certificate': None, # No longer stored in User model
+                'ojt_status': None, # No longer stored in User model
+                'ojt_remarks': None, # No longer stored in User model
+                'imported_by': ojt.acc_username,
+                'import_date': None, # No longer stored in User model
+                'batch_year': ojt.year_graduated,
             })
         
         return JsonResponse({
