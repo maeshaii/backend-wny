@@ -6,6 +6,9 @@ class AccountType(models.Model):
     peso = models.BooleanField()
     user = models.BooleanField()
     coordinator = models.BooleanField()
+    ojt = models.BooleanField(default=False)  # Added for OJT account type with default
+
+
 
 class Aacup(models.Model):
     aacup_id = models.AutoField(primary_key=True)
@@ -135,9 +138,10 @@ class Suc(models.Model):
 
 class TrackerForm(models.Model):
     tracker_form_id = models.AutoField(primary_key=True)
-    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms')
+    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms', null=True, blank=True)
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='tracker_forms')
     title = models.CharField(max_length=255, blank=True, null=True)  # Added title field
+    accepting_responses = models.BooleanField(default=True)  # Controls if alumni can submit
 
 class User(models.Model):
     user_id = models.AutoField(primary_key=True)
@@ -178,6 +182,7 @@ class User(models.Model):
     pursue_further_study = models.CharField(max_length=10, null=True, blank=True)
     date_started = models.DateField(null=True, blank=True)
     school_name = models.CharField(max_length=255, null=True, blank=True)
+    ojtstatus = models.CharField(max_length=50, null=True, blank=True)
     USERNAME_FIELD = 'acc_username'
     REQUIRED_FIELDS = []
 
@@ -205,36 +210,6 @@ class TrackerResponse(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
 
 # OJT-specific models
-class OJTData(models.Model):
-    ojt_id = models.AutoField(primary_key=True)
-    ctu_id = models.CharField(max_length=100, unique=True)
-    first_name = models.CharField(max_length=100)
-    middle_name = models.CharField(max_length=100, null=True, blank=True)
-    last_name = models.CharField(max_length=100)
-    gender = models.CharField(max_length=10)
-    birthdate = models.DateField()
-    phone_number = models.CharField(max_length=20, null=True, blank=True)
-    address = models.TextField(null=True, blank=True)
-    civil_status = models.CharField(max_length=50, null=True, blank=True)
-    social_media = models.CharField(max_length=255, null=True, blank=True)
-    
-    # OJT-specific fields
-    ojt_company = models.CharField(max_length=255, null=True, blank=True)
-    ojt_position = models.CharField(max_length=255, null=True, blank=True)
-    ojt_start_date = models.DateField(null=True, blank=True)
-    ojt_end_date = models.DateField(null=True, blank=True)
-    ojt_supervisor = models.CharField(max_length=255, null=True, blank=True)
-    ojt_performance_rating = models.CharField(max_length=50, null=True, blank=True)
-    ojt_certificate = models.CharField(max_length=255, null=True, blank=True)
-    ojt_status = models.CharField(max_length=50, default='Pending')  # Pending, Completed, Failed
-    ojt_remarks = models.TextField(null=True, blank=True)
-    
-    # Import tracking
-    imported_by = models.CharField(max_length=100, null=True, blank=True)  # Coordinator username
-    import_date = models.DateTimeField(auto_now_add=True)
-    batch_year = models.IntegerField(null=True, blank=True)
-    course = models.CharField(max_length=100, null=True, blank=True)
-
 class OJTImport(models.Model):
     import_id = models.AutoField(primary_key=True)
     coordinator = models.CharField(max_length=100)  # Coordinator who imported
@@ -244,3 +219,13 @@ class OJTImport(models.Model):
     file_name = models.CharField(max_length=255)
     records_imported = models.IntegerField(default=0)
     status = models.CharField(max_length=50, default='Completed')  # Completed, Failed, Partial
+class TrackerFileUpload(models.Model):
+    response = models.ForeignKey(TrackerResponse, on_delete=models.CASCADE, related_name='files')
+    question_id = models.IntegerField()  # ID of the question this file answers
+    file = models.FileField(upload_to='tracker_uploads/')
+    original_filename = models.CharField(max_length=255)
+    file_size = models.IntegerField()  # File size in bytes
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.original_filename} - {self.response.user.f_name} {self.response.user.l_name}"
