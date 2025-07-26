@@ -1,38 +1,106 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FaChartBar, FaUser, FaUserCircle, FaTh, FaPowerOff, FaFileImport } from 'react-icons/fa';
 import Statistics from './statistics';
 import DetailsTable from './detailstable'; // ✅ Your new table component
-import { fetchAlumniStatistics } from '../../services/api';
+import { fetchOJTStatistics, importOJT } from '../../services/api';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
-  const [selectedFile, setSelectedFile] = useState('');
-  const [alumniYears, setAlumniYears] = useState<{ year: number; count: number }[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [batchYear, setBatchYear] = useState('');
+  const [course, setCourse] = useState('BSIT');
+  const [ojtYears, setOjtYears] = useState<{ year: number; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importLoading, setImportLoading] = useState(false);
+  const [coordinatorUsername, setCoordinatorUsername] = useState('');
+  const [activePage, setActivePage] = useState('dashboard'); // 'dashboard' or 'imports'
 
   useEffect(() => {
-    const loadAlumniData = async () => {
+    // Get coordinator username from localStorage
+    const user = localStorage.getItem('user');
+    if (user) {
+      const userData = JSON.parse(user);
+      setCoordinatorUsername(userData.name || '');
+    }
+
+    const loadOJTData = async () => {
       try {
-        const data = await fetchAlumniStatistics();
-        setAlumniYears(data.years || []);
+        console.log('Loading OJT data for coordinator:', coordinatorUsername);
+        const data = await fetchOJTStatistics(coordinatorUsername);
+        console.log('OJT data received:', data);
+        setOjtYears(data.years || []);
       } catch (error) {
-        console.error('Error loading alumni data:', error);
-        setAlumniYears([]);
+        console.error('Error loading OJT data:', error);
+        setOjtYears([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadAlumniData();
-  }, []);
+    if (coordinatorUsername) {
+      loadOJTData();
+    }
+  }, [coordinatorUsername]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0].name);
+      setSelectedFile(e.target.files[0]);
     } else {
-      setSelectedFile('');
+      setSelectedFile(null);
     }
+  };
+
+  const handleImport = async () => {
+    if (!selectedFile || !batchYear) {
+      alert('Please select a file and enter the batch year');
+      return;
+    }
+
+    setImportLoading(true);
+    try {
+      const result = await importOJT(selectedFile, batchYear, course, coordinatorUsername);
+      if (result.success) {
+        alert('OJT import successful!');
+        setShowModal(false);
+        // Reload OJT data
+        await refreshOJTData();
+      } else {
+        alert(result.message || 'OJT import failed');
+      }
+    } catch (error) {
+      console.error('OJT import error:', error);
+      alert('OJT import failed. Please try again.');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const refreshOJTData = async () => {
+    setLoading(true);
+    try {
+      console.log('Refreshing OJT data for coordinator:', coordinatorUsername);
+      const data = await fetchOJTStatistics(coordinatorUsername);
+      console.log('Refreshed OJT data:', data);
+      setOjtYears(data.years || []);
+    } catch (error) {
+      console.error('Error refreshing OJT data:', error);
+      setOjtYears([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    // Navigate to login
+    navigate('/login');
   };
 
   // Inline styles
@@ -43,36 +111,66 @@ export default function Dashboard() {
       fontFamily: 'Arial, sans-serif',
     },
     sidebar: {
-      width: '180px',
-      backgroundColor: '#164B87',
-      color: 'white',
+      width: '220px',
+      height: '100vh',
+      backgroundColor: '#1e4c7a',
       display: 'flex',
       flexDirection: 'column' as const,
       justifyContent: 'space-between',
+      color: 'white',
+      padding: '20px 10px',
+    },
+    topSection: {
+      display: 'flex',
+      flexDirection: 'column' as const,
     },
     logo: {
-      margin: '20px 0',
-      textAlign: 'center' as const,
-      fontWeight: 'bold',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      alignItems: 'center',
+      marginBottom: '20px',
     },
-    nav: {
-      flex: 1,
+    logoImage: {
+      width: '80px',
+      height: '80px',
+      borderRadius: '50%',
+    },
+    logoText: {
+      fontSize: '14px',
+      marginTop: '8px',
+      textAlign: 'center' as const,
+      fontWeight: 'bold' as const,
+    },
+    navList: {
+      listStyleType: 'none' as const,
+      padding: 0,
+      margin: 0,
     },
     navItem: {
-      padding: '12px 20px',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '12px 16px',
+      margin: '8px 0',
       cursor: 'pointer',
+      borderRadius: '8px',
+      transition: 'background 0.3s',
+      textDecoration: 'none',
+      color: 'white',
     },
-    navItemActive: {
-      padding: '12px 20px',
-      cursor: 'pointer',
-      backgroundColor: '#4B6EAF',
+    activeNavItem: {
+      backgroundColor: '#406b94',
+    },
+    icon: {
+      marginRight: '12px',
+      fontSize: '18px',
     },
     logout: {
-      background: 'none',
-      border: 'none',
-      color: 'white',
-      margin: '20px',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '12px 16px',
       cursor: 'pointer',
+      textDecoration: 'none',
+      color: 'white',
     },
     main: {
       flex: 1,
@@ -221,37 +319,73 @@ export default function Dashboard() {
     },
   };
 
+  const links = [
+    { to: '/coordinator/dashboard', label: 'Dashboard', icon: <FaTh style={styles.icon} /> },
+    { to: '/coordinator/imports', label: 'Imports', icon: <FaFileImport style={styles.icon} /> },
+  ];
+
   return (
     <div style={styles.container}>
       {/* ===================== Sidebar ===================== */}
-      <aside style={styles.sidebar}>
-        <div style={styles.logo}>WhereNaYou</div>
-        <nav style={styles.nav}>
-          <ul>
-            <li style={styles.navItem}>🏠 Dashboard</li>
-            <li style={styles.navItemActive}>📄 Imports</li>
+      <div style={styles.sidebar}>
+        <div style={styles.topSection}>
+          <div style={styles.logo}>
+            <img src="/logo192.png" alt="Logo" style={styles.logoImage} />
+            <h1 style={styles.logoText}>WhereNa You</h1>
+          </div>
+
+          <ul style={styles.navList}>
+            {links.map((link) => (
+              <li key={link.to}>
+                <div
+                  style={{
+                    ...styles.navItem,
+                    ...(link.label === 'Imports' && activePage === 'imports' ? styles.activeNavItem : {}),
+                    ...(link.label === 'Dashboard' && activePage === 'dashboard' ? styles.activeNavItem : {}),
+                  }}
+                  onClick={() => {
+                    if (link.label === 'Dashboard') {
+                      setActivePage('dashboard');
+                      setSelectedCard(null);
+                    } else if (link.label === 'Imports') {
+                      setActivePage('imports');
+                      refreshOJTData();
+                    }
+                  }}
+                >
+                  {link.icon} {link.label}
+                </div>
+              </li>
+            ))}
           </ul>
-        </nav>
-        <button style={styles.logout}>🔒 Logout</button>
-      </aside>
+        </div>
+
+        <div style={styles.logout} onClick={handleLogout}>
+          <FaPowerOff style={styles.icon} /> Logout
+        </div>
+      </div>
 
       {/* ===================== Main Content ===================== */}
       <main style={styles.main}>
         <div style={styles.header}>
-          <h1>Imports</h1>
+          <h1>OJT Imports</h1>
           <div style={styles.actions}>
-            <button
-              style={styles.statsBtn}
-              onClick={() => setShowStats(!showStats)}
-            >
-              {showStats ? 'Hide Statistics' : 'View Statistics'}
-            </button>
-            <button
-              style={styles.importBtn}
-              onClick={() => setShowModal(true)}
-            >
-              Import OJT
-            </button>
+            {activePage === 'imports' && (
+              <>
+                <button
+                  style={styles.statsBtn}
+                  onClick={() => setShowStats(!showStats)}
+                >
+                  {showStats ? 'Hide Statistics' : 'View Statistics'}
+                </button>
+                <button
+                  style={styles.importBtn}
+                  onClick={() => setShowModal(true)}
+                >
+                  Import OJT
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -265,21 +399,21 @@ export default function Dashboard() {
             <div style={styles.cards}>
               {loading ? (
                 <div style={{ width: '100%', textAlign: 'center', padding: '20px' }}>
-                  Loading alumni data...
+                  Loading OJT data...
                 </div>
-              ) : alumniYears.length === 0 ? (
+              ) : ojtYears.length === 0 ? (
                 <div style={{ width: '100%', textAlign: 'center', padding: '20px' }}>
-                  No alumni data found.
+                  No OJT data found.
                 </div>
               ) : (
-                alumniYears.map((yearData) => (
+                ojtYears.map((yearData) => (
                   <div
                     key={yearData.year}
                     style={styles.card}
                     onClick={() => setSelectedCard(yearData.year)}
                   >
                     <div style={styles.cardImage}></div>
-                    <p style={styles.cardText}>YEAR GRADUATED: {yearData.year}</p>
+                    <p style={styles.cardText}>BATCH: {yearData.year}</p>
                     <p style={styles.cardText}>Imported: {yearData.count}</p>
                   </div>
                 ))
@@ -295,22 +429,46 @@ export default function Dashboard() {
       {showModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modal}>
-            <h2 style={styles.modalH2}>Import OJT Data</h2>
+            <h2 style={styles.modalH2}>Import OJT Training Data</h2>
 
             <label style={styles.modalLabel}>Batch Graduated</label>
-            <input type="text" placeholder="Enter batch..." style={styles.modalInput} />
+            <input 
+              type="text" 
+              placeholder="Enter batch year..." 
+              style={styles.modalInput}
+              value={batchYear}
+              onChange={(e) => setBatchYear(e.target.value)}
+            />
+
+            <label style={styles.modalLabel}>Course</label>
+            <select 
+              style={styles.modalInput}
+              value={course}
+              onChange={(e) => setCourse(e.target.value)}
+            >
+              <option value="BSIT">BSIT</option>
+              <option value="BSCS">BSCS</option>
+              <option value="BSIS">BSIS</option>
+            </select>
 
             <label style={styles.modalLabel}>Upload File</label>
             <label style={styles.fileLabel}>
-              {selectedFile || 'Choose File'}
-              <input type="file" onChange={handleFileChange} style={styles.fileInput} />
+              {selectedFile ? selectedFile.name : 'Choose File'}
+              <input type="file" onChange={handleFileChange} style={styles.fileInput} accept=".xlsx,.xls" />
             </label>
 
             <div style={styles.modalActions}>
-              <button style={styles.addBtn}>Add</button>
+              <button 
+                style={styles.addBtn} 
+                onClick={handleImport}
+                disabled={importLoading}
+              >
+                {importLoading ? 'Importing...' : 'Import'}
+              </button>
               <button
                 style={styles.cancelBtn}
                 onClick={() => setShowModal(false)}
+                disabled={importLoading}
               >
                 Cancel
               </button>

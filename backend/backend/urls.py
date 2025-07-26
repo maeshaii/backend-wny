@@ -16,10 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('apps.api.urls')),  # Make sure your app URL is included here
     path('api/statistics/', include('apps.alumni_stats.urls')),
     path('api/users/', include('apps.alumni_users.urls')),
+    path('api/ojt-users/', include('apps.ojt_users.urls')),
 ]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

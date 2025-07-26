@@ -2,7 +2,7 @@ from django.shortcuts import render
 import pandas as pd
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import User
+from .models import User, TrackerResponse, Question
 from io import BytesIO
 import logging
 
@@ -15,37 +15,68 @@ def export_alumni_excel(request):
     alumni = User.objects.filter(account_type__user=True)
     if batch_year:
         alumni = alumni.filter(year_graduated=batch_year)
+
+    # Basic User model fields to always include
+    basic_fields = [
+        ("CTU_ID", "acc_username"),
+        ("First Name", "f_name"),
+        ("Middle Name", "m_name"),
+        ("Last Name", "l_name"),
+        ("Gender", "gender"),
+        ("Birthdate", "birthdate"),
+        ("Phone Number", "phone_num"),
+        ("Address", "address"),
+        ("Social Media", "social_media"),
+        ("Civil Status", "civil_status"),
+        ("Age", "age"),
+        ("Email", "email"),
+        ("Program Name", "program"),
+        
+    ]
+
+    # Collect all tracker question texts that have been answered by any alumni
+    all_tracker_qids = set()
+    for alum in alumni:
+        tracker_responses = TrackerResponse.objects.filter(user=alum).order_by('-submitted_at')
+        latest_tracker = tracker_responses.first() if tracker_responses.exists() else None
+        tracker_answers = latest_tracker.answers if latest_tracker and latest_tracker.answers else {}
+        all_tracker_qids.update([int(qid) for qid in tracker_answers.keys() if str(qid).isdigit()])
+    # Get question text for all qids
+    tracker_questions = {q.id: q.text for q in Question.objects.filter(id__in=all_tracker_qids)}
+    tracker_columns = [tracker_questions[qid] for qid in sorted(tracker_questions.keys())]
+
+    # Build a unique set of export columns: basic fields + tracker question texts (no duplicates)
+    export_columns = []
+    seen = set()
+    for col, _ in basic_fields:
+        if col not in seen:
+            export_columns.append(col)
+            seen.add(col)
+    for qtext in tracker_columns:
+        if qtext not in seen:
+            export_columns.append(qtext)
+            seen.add(qtext)
+
     data = []
     for alum in alumni:
-        data.append({
-            "CTU_ID": alum.acc_username,
-            "First_Name": alum.f_name,
-            "Middle_Name": alum.m_name,
-            "Last_Name": alum.l_name,
-            "Gender": alum.gender,
-            "Birthdate": getattr(alum, 'birthdate', ''),
-            "Phone_Number": alum.phone_num,
-            "Address": alum.address,
-            "Social_Media": getattr(alum, 'social_media', ''),
-            "Civil_Status": getattr(alum, 'civil_status', ''),
-            "Age": getattr(alum, 'age', ''),
-            "Email": getattr(alum, 'email', ''),
-            "Program_Name": getattr(alum, 'program', '') or getattr(alum, 'course', ''),
-            "Status": getattr(alum, 'status', '') or getattr(alum, 'user_status', ''),
-            "Company name current": getattr(alum, 'company_name_current', ''),
-            "Position current": getattr(alum, 'position_current', ''),
-            "Sector current": getattr(alum, 'sector_current', ''),
-            "Employment duration current": getattr(alum, 'employment_duration_current', ''),
-            "Salary current": getattr(alum, 'salary_current', ''),
-            "Supporting document current": getattr(alum, 'supporting_document_current', ''),
-            "Awards recognition current": getattr(alum, 'awards_recognition_current', ''),
-            "Supporting document awards recognition": getattr(alum, 'supporting_document_awards_recognition', ''),
-            "Unemployment reason": getattr(alum, 'unemployment_reason', ''),
-            "Pursue further study": getattr(alum, 'pursue_further_study', ''),
-            "Date started": getattr(alum, 'date_started', ''),
-            "School name": getattr(alum, 'school_name', ''),
-        })
-    df = pd.DataFrame(data)
+        row = {}
+        # Fill basic fields
+        for col, field in basic_fields:
+            value = getattr(alum, field, "")
+            row[col] = value if value is not None else ""
+        # Fill tracker answers, but only if not already filled by user model
+        tracker_responses = TrackerResponse.objects.filter(user=alum).order_by('-submitted_at')
+        latest_tracker = tracker_responses.first() if tracker_responses.exists() else None
+        tracker_answers = latest_tracker.answers if latest_tracker and latest_tracker.answers else {}
+        for qid, qtext in tracker_questions.items():
+            if qtext in row and row[qtext]:
+                continue  # Already filled by user model
+            answer = tracker_answers.get(str(qid)) or tracker_answers.get(qid)
+            if isinstance(answer, list):
+                answer = ', '.join(str(a) for a in answer)
+            row[qtext] = answer if answer is not None else ""
+        data.append(row)
+    df = pd.DataFrame(data, columns=export_columns)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False)

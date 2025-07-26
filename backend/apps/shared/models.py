@@ -6,6 +6,9 @@ class AccountType(models.Model):
     peso = models.BooleanField()
     user = models.BooleanField()
     coordinator = models.BooleanField()
+    ojt = models.BooleanField(default=False)  # Added for OJT account type with default
+
+
 
 class Aacup(models.Model):
     aacup_id = models.AutoField(primary_key=True)
@@ -88,6 +91,7 @@ class Notification(models.Model):
     notification_id = models.AutoField(primary_key=True)
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='notifications')
     notif_type = models.CharField(max_length=100)
+    subject = models.CharField(max_length=255, blank=True, null=True)  # Added subject field
     notifi_content = models.TextField()
     notif_date = models.DateTimeField()
 
@@ -134,8 +138,10 @@ class Suc(models.Model):
 
 class TrackerForm(models.Model):
     tracker_form_id = models.AutoField(primary_key=True)
-    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms')
+    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms', null=True, blank=True)
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='tracker_forms')
+    title = models.CharField(max_length=255, blank=True, null=True)  # Added title field
+    accepting_responses = models.BooleanField(default=True)  # Controls if alumni can submit
 
 class User(models.Model):
     user_id = models.AutoField(primary_key=True)
@@ -176,6 +182,7 @@ class User(models.Model):
     pursue_further_study = models.CharField(max_length=10, null=True, blank=True)
     date_started = models.DateField(null=True, blank=True)
     school_name = models.CharField(max_length=255, null=True, blank=True)
+    ojtstatus = models.CharField(max_length=50, null=True, blank=True)
     USERNAME_FIELD = 'acc_username'
     REQUIRED_FIELDS = []
 
@@ -186,3 +193,39 @@ class User(models.Model):
     @property
     def is_authenticated(self):
         return True
+
+class QuestionCategory(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+
+class Question(models.Model):
+    category = models.ForeignKey(QuestionCategory, related_name='questions', on_delete=models.CASCADE)
+    text = models.CharField(max_length=255)
+    type = models.CharField(max_length=50)
+    options = models.JSONField(blank=True, null=True)  # For radio/multiple/checkbox
+
+class TrackerResponse(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    answers = models.JSONField()  # {question_id: answer}
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+# OJT-specific models
+class OJTImport(models.Model):
+    import_id = models.AutoField(primary_key=True)
+    coordinator = models.CharField(max_length=100)  # Coordinator who imported
+    batch_year = models.IntegerField()
+    course = models.CharField(max_length=100)
+    import_date = models.DateTimeField(auto_now_add=True)
+    file_name = models.CharField(max_length=255)
+    records_imported = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, default='Completed')  # Completed, Failed, Partial
+class TrackerFileUpload(models.Model):
+    response = models.ForeignKey(TrackerResponse, on_delete=models.CASCADE, related_name='files')
+    question_id = models.IntegerField()  # ID of the question this file answers
+    file = models.FileField(upload_to='tracker_uploads/')
+    original_filename = models.CharField(max_length=255)
+    file_size = models.IntegerField()  # File size in bytes
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.original_filename} - {self.response.user.f_name} {self.response.user.l_name}"

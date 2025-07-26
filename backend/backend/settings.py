@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-+koo^iomvn9!og7s955%f0=o+$2)a6l)e*^g#ka&j0#fzyb(b1
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "0.0.0.0", "192.168.1.27"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "0.0.0.0", "192.168.1.5"]
 
 
 # Application definition
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "apps.tracker",
     "apps.alumni_stats",
     "apps.alumni_users",
+    "apps.ojt_users",
     "rest_framework",
     "corsheaders",
 ]
@@ -63,7 +64,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:8000",
     "http://10.0.2.2:8000",
-    "http://192.168.1.27:8000",
+    "http://192.168.1.5:8000",
 ]
 ROOT_URLCONF = 'backend.urls'
 
@@ -91,7 +92,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'TRIAL',
+        'NAME': 'wny-db',
         'USER': 'postgres',
         'PASSWORD': '12345',
         'HOST': 'localhost',
@@ -135,6 +136,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Media files (Uploaded files)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

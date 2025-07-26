@@ -1,13 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loginUser } from '../../../services/api';
+import { loginUser, fetchAlumniDetails } from '../../../services/api';
 const background = require('../../../images/ctu.jpg');
+
+// Helper to ensure date is always in YYYY-MM-DD format
+function toYYYYMMDD(dateStr: string) {
+  if (!dateStr) return '';
+  dateStr = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [month, day, year] = dateStr.split('/');
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  // Try to parse with Date if possible
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  return '';
+}
 
 const Login = () => {
   const navigate = useNavigate();
   const [acc_username, setUsername] = useState('');
   const [acc_password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  // Auto-fill birthdate if user_id is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('user_id');
+    if (userId) {
+      fetchAlumniDetails(userId).then(res => {
+        if (res && res.alumni && res.alumni.birthdate) {
+          const fixed = toYYYYMMDD(res.alumni.birthdate);
+          console.log('Fetched birthdate:', res.alumni.birthdate, '->', fixed);
+          setPassword(fixed);
+        }
+        if (res && res.alumni && res.alumni.ctu_id) {
+          setUsername(res.alumni.ctu_id);
+        }
+      });
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,11 +53,14 @@ const Login = () => {
         if (data.user.account_type.admin) {
           // Admin user - go to admin dashboard
           navigate('/dashboard');
-        } else if (data.user.account_type.user) {
-          // Alumni user - go to alumni dashboard
+        } else if (data.user.account_type.user || data.user.account_type.ojt) {
+          // Alumni or OJT user - go to alumni dashboard (they share the same UI)
           navigate('/alumni/dashboard');
+        } else if (data.user.account_type.coordinator) {
+          // Coordinator user - go to coordinator dashboard
+          navigate('/coordinator/dashboard');
         } else {
-          // Other account types (PESO, coordinator)
+          // Other account types (PESO, etc.)
           navigate('/dashboard');
         }
       } else {
@@ -60,7 +98,7 @@ const Login = () => {
             id="birthdate"
             required
             value={acc_password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => setPassword(toYYYYMMDD(e.target.value))}
             style={styles.input}
           />
           {error && <p style={{ color: 'red', marginBottom: 10 }}>{error}</p>}

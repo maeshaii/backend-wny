@@ -76,6 +76,7 @@
   .tracker-tabs a {
     color: #2d4e85;
     font-weight: 500;
+    font-size: 1rem;
     text-decoration: none;
   }
 
@@ -89,10 +90,70 @@
     Card Styles
   ----------------------------*/
   .card {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: #f4f8fb;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(30, 76, 122, 0.08);
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    border: 1px solid #dbeafe;
+    color: #1e4c7a;
+  }
+
+  .card.question-box {
+    background: #eaf3fb;
+    border: 1px solid #b6d0ee;
+    padding: 12px 14px;
+    border-radius: 8px;
+    margin-bottom: 18px;
+  }
+
+  .card.question-box.editing,
+  .card.question-box.adding {
+    background: #e0ecfa;
+    border: 2px solid #1e4c7a;
+  }
+
+  /* Main blue button style for all major actions */
+  .action-button, .button-edit, .button-delete, .button-update, .button-cancel, .button-add, .button-preview {
+    background: #1e4c7a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-bottom: 4px;
+    margin-right: 8px;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 4px rgba(30, 76, 122, 0.08);
+  }
+  .action-button:hover, .button-edit:hover, .button-delete:hover, .button-update:hover, .button-cancel:hover, .button-add:hover, .button-preview:hover {
+    background: #406b94;
+  }
+
+  input, textarea, select {
+    border: 1px solid #b6d0ee;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 1rem;
+    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+    margin-bottom: 8px;
+    background: #f7fbff;
+    color: #164B87;
+  }
+
+  label {
+    color: #1e4c7a;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  h2, h3 {
+    color: #1e4c7a;
+    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+    font-size: 1.1rem;
+    margin-bottom: 6px;
   }
 
   /* ---------------------------
@@ -110,47 +171,6 @@
     color: #164B87;
     font-size: 0.95rem;
     margin-top: 8px;
-  }
-
-  /* Editable Form Description */
-  .editable-paragraph {
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-
-  .editable-paragraph:hover {
-    background-color: #f3f3f3;
-    border-radius: 6px;
-    padding: 4px;
-  }
-
-  .editable-textarea {
-    width: 100%;
-    min-height: 80px;
-    font-size: 14px;
-    font-family: inherit;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-  }
-
-  /* Editable Question Input & Type Selector */
-  .question-input {
-    width: 100%;
-    padding: 8px;
-    margin-bottom: 12px;
-    font-size: 15px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-  }
-
-  .question-type {
-    width: 100%;
-    padding: 8px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    margin-bottom: 10px;
   }
 
   /* ---------------------------
@@ -221,6 +241,7 @@
     background: none;
     border: none;
     font-weight: 500;
+    font-size: 1rem;
     color: #164B87;
     padding: 8px 0;
     cursor: pointer;
@@ -319,5 +340,90 @@
     border-radius: 6px;
     margin-top: 10px;
     box-sizing: border-box;
-    
   }
+
+/* File upload styles */
+.file-upload-container {
+  margin-top: 8px;
+}
+
+.file-upload-container input[type="file"] {
+  width: 100%;
+  padding: 8px;
+  border: 2px dashed #ccc;
+  border-radius: 4px;
+  background-color: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.file-upload-container input[type="file"]:hover {
+  border-color: #1e4c7a;
+  background-color: #f0f8ff;
+}
+
+.file-upload-container input[type="file"]:focus {
+  outline: none;
+  border-color: #1e4c7a;
+  box-shadow: 0 0 0 2px rgba(30, 76, 122, 0.2);
+}
+
+.file-info {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #e8f5e8;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #2d5a2d;
+  border: 1px solid #c3e6c3;
+}
+
+.file-info strong {
+  color: #1e4c7a;
+}
+
+.file-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #ffeaea;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #d32f2f;
+  border: 1px solid #ffcdd2;
+}
+
+/* File display in responses */
+.file-display {
+  margin-top: 4px;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.file-display .file-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-display .file-link {
+  color: #1e4c7a;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.file-display .file-link:hover {
+  color: #0d2b4a;
+}
+
+.file-display .file-size {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.file-display .file-date {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6c757d;
+}

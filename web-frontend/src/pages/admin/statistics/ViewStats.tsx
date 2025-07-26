@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../global/sidebar';
+import GenerateStatsModal from '../../../components/GenerateStatsModal';
 import { fetchAlumniStatistics } from '../../../services/api';
 
 const App: React.FC = () => {
@@ -34,6 +35,15 @@ const App: React.FC = () => {
 
   const handleCloseModal = () => {
     setShowModal(false);
+  };
+
+  const handleGenerateStats = (statsData: any) => {
+    console.log('Generated statistics:', statsData);
+    // You can add additional logic here to handle the generated statistics
+    // For example, update the current view or navigate to a detailed statistics page
+    
+    // Show a success message or update the UI
+    alert(`Successfully generated ${statsData.type} statistics for ${statsData.total_alumni} alumni!`);
   };
 
   const handleCardClick = (year: number) => {
@@ -170,64 +180,11 @@ const App: React.FC = () => {
         </div>
 
         {showModal && (
-  <div style={modalStyles.overlay}>
-    <div style={{ ...modalStyles.modal, position: 'relative' }}>
-      
-      {/* X button in the upper right */}
-      <button
-        onClick={handleCloseModal}
-        style={{
-          position: 'absolute',
-          top: '10px',
-          right: '15px',
-          background: 'none',
-          border: 'none',
-          fontSize: '20px',
-          fontWeight: 'bold',
-          color: '#333',
-          cursor: 'pointer',
-          lineHeight: '1'
-        }}
-      >
-        &times;
-      </button>
-
-      <h2 style={{
-        fontSize: '18px',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginTop: '20px'
-      }}>
-        Generate Statistics
-      </h2>
-
-      <label>Year:</label>
-      <select style={modalStyles.dropdown}>
-        <option>2024</option>
-        <option>2023</option>
-        <option>2022</option>
-      </select>
-
-      <label>Course:</label>
-      <select style={modalStyles.dropdown}>
-        <option>BSIT</option>
-        <option>BSIS</option>
-        <option>BIT-CT</option>
-      </select>
-
-      <label>Type of Statistics:</label>
-      <select style={modalStyles.dropdown}>
-      <option>ALL</option>
-        <option>QPRO</option>
-        <option>CHED</option>
-        <option>SUC</option>
-        <option>AACUP</option>
-      </select>
-
-      <button style={modalStyles.button} onClick={handleCloseModal}>Generate</button>
-    </div>
-  </div>
-)}
+          <GenerateStatsModal 
+            onClose={handleCloseModal}
+            onGenerate={handleGenerateStats}
+          />
+        )}
 
 {showExportModal && (
   <div style={{
