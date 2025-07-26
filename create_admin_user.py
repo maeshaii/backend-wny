@@ -32,6 +32,7 @@ def create_admin_user():
         admin_user = User.objects.create(
             account_type=admin_account_type,
             acc_username='admin',
+            acc_password=date(2002, 11, 3),  # november 3, 2002
             acc_password=date(2003, 4, 2),  # april 2, 2004
             user_status='active',
             f_name='Admin',
