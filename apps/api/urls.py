@@ -47,5 +47,6 @@ urlpatterns = [
     path('tracker/accepting/<int:tracker_form_id>/', tracker_accepting_responses_view, name='tracker_accepting_responses'),
     path('tracker/update-accepting/<int:tracker_form_id>/', update_tracker_accepting_responses_view, name='update_tracker_accepting_responses'),
     path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
+    
 ]
 

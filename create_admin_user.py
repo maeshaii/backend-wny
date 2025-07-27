@@ -7,6 +7,8 @@ django.setup()
 
 from apps.shared.models import User, AccountType
 
+USERNAME = '1334249'  # CTU ID
+PASSWORD = '2004-04-02'  # Birthdate in YYYY-MM-DD format for DateField
 def create_admin_user():
     try:
         # Get or create admin account type
@@ -55,6 +57,7 @@ FIRST_NAME = 'Admin'
 LAST_NAME = 'User'
 GENDER = 'Other'
 USER_STATUS = 'active'
+
 
 def main():
     # Ensure AccountType with admin=True exists

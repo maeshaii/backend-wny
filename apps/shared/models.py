@@ -139,7 +139,7 @@ class Suc(models.Model):
 
 class TrackerForm(models.Model):
     tracker_form_id = models.AutoField(primary_key=True)
-    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms', null=True, blank=True)
+    standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='tracker_forms')
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='tracker_forms')
     title = models.CharField(max_length=255, blank=True, null=True)  # Added title field
     accepting_responses = models.BooleanField(default=True)  # Controls if alumni can submit
