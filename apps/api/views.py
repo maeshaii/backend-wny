@@ -1,8 +1,9 @@
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse
+from apps.shared.models import *
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -420,3 +421,4 @@ def delete_notifications_view(request):
         return JsonResponse({'success': True, 'deleted': deleted})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
