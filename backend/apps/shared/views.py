@@ -85,6 +85,97 @@ def export_alumni_excel(request):
     response['Content-Disposition'] = 'attachment; filename=alumni_export.xlsx'
     return response
 
+# Export OJT data with completed status to Excel
+def export_ojt_completed_excel(request):
+    batch_year = request.GET.get('batch_year')
+    course = request.GET.get('course', '')
+    coordinator_username = request.GET.get('coordinator_username', '')
+    
+    # Filter OJT users with completed status
+    ojt_users = User.objects.filter(account_type__ojt=True)
+    
+    if batch_year:
+        ojt_users = ojt_users.filter(year_graduated=batch_year)
+    if course:
+        ojt_users = ojt_users.filter(course=course)
+    
+    # Basic OJT fields to include
+    basic_fields = [
+        ("CTU_ID", "acc_username"),
+        ("First Name", "f_name"),
+        ("Middle Name", "m_name"),
+        ("Last Name", "l_name"),
+        ("Gender", "gender"),
+        ("Birthdate", "birthdate"),
+        ("Phone Number", "phone_num"),
+        ("Address", "address"),
+        ("Social Media", "social_media"),
+        ("Civil Status", "civil_status"),
+        ("Age", "age"),
+        ("Email", "email"),
+        ("Program Name", "course"),
+        ("Year Graduated", "year_graduated"),
+    ]
+
+    # Get OJT-specific data from OjtUser model
+    ojt_data = []
+    for user in ojt_users:
+        try:
+            ojt_profile = user.ojt_profile
+            # Only include if status is completed
+            if ojt_profile.ojt_status == 'completed':
+                row = {}
+                # Fill basic fields
+                for col, field in basic_fields:
+                    value = getattr(user, field, "")
+                    row[col] = value if value is not None else ""
+                
+                # Add OJT-specific fields
+                row["OJT Status"] = ojt_profile.ojt_status or ""
+                row["Company Name"] = ojt_profile.company_name or ""
+                row["Company Address"] = ojt_profile.company_address or ""
+                row["Supervisor Name"] = ojt_profile.supervisor_name or ""
+                row["Supervisor Contact"] = ojt_profile.supervisor_contact or ""
+                row["Supervisor Email"] = ojt_profile.supervisor_email or ""
+                row["Start Date"] = ojt_profile.start_date or ""
+                row["End Date"] = ojt_profile.end_date or ""
+                row["Total Hours"] = ojt_profile.total_hours or 0
+                row["Position Title"] = ojt_profile.position_title or ""
+                row["Department"] = ojt_profile.department or ""
+                row["Stipend Amount"] = ojt_profile.stipend_amount or ""
+                row["Requirements Submitted"] = "Yes" if ojt_profile.requirements_submitted else "No"
+                row["Evaluation Score"] = ojt_profile.evaluation_score or ""
+                row["Remarks"] = ojt_profile.remarks or ""
+                
+                ojt_data.append(row)
+        except:
+            # Skip if no OJT profile exists
+            continue
+
+    # Create DataFrame with all columns
+    all_columns = [col for col, _ in basic_fields] + [
+        "OJT Status", "Company Name", "Company Address", "Supervisor Name", "Supervisor Contact", 
+        "Supervisor Email", "Start Date", "End Date", "Total Hours", "Position Title", 
+        "Department", "Stipend Amount", "Requirements Submitted", "Evaluation Score", "Remarks"
+    ]
+    
+    df = pd.DataFrame(ojt_data, columns=all_columns)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+    
+    filename = f"ojt_completed_export"
+    if batch_year:
+        filename += f"_batch_{batch_year}"
+    if course:
+        filename += f"_{course}"
+    filename += ".xlsx"
+    
+    response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
 # Import alumni data from Excel, updating only missing fields
 @csrf_exempt
 def import_alumni_excel(request):

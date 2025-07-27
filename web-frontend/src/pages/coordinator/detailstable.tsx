@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchOJTByYear } from '../../services/api';
+import { fetchOJTByYear, exportOJTCompleted } from '../../services/api';
 
 interface DetailsTableProps {
   onBack: () => void;
@@ -47,6 +47,34 @@ export default function DetailsTable({ onBack, selectedYear }: DetailsTableProps
       updated[idx] = { ...updated[idx], ojt_status: newStatus };
       return updated;
     });
+  };
+
+  // Handle export of completed OJT data
+  const handleSendToAdmin = async () => {
+    try {
+      // Filter only completed OJT records
+      const completedRecords = ojtData.filter(record => record.ojt_status === 'Completed');
+      
+      if (completedRecords.length === 0) {
+        alert('No completed OJT records found to export.');
+        return;
+      }
+
+      const result = await exportOJTCompleted(
+        selectedYear?.toString(),
+        completedRecords[0]?.course || 'BSIT',
+        coordinatorUsername
+      );
+
+      if (result.success) {
+        alert(`Successfully exported ${completedRecords.length} completed OJT records to Excel file.`);
+      } else {
+        alert('Failed to export data: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('An error occurred while exporting the data.');
+    }
   };
 
   // Inline styles
@@ -162,7 +190,7 @@ export default function DetailsTable({ onBack, selectedYear }: DetailsTableProps
 
       <div style={styles.tableActions}>
         <button style={styles.backBtn} onClick={onBack}>Back</button>
-        <button style={styles.sendBtn}>Send to Admin</button>
+        <button style={styles.sendBtn} onClick={handleSendToAdmin}>Send to Admin</button>
       </div>
 
       {/* Modal for row details */}
