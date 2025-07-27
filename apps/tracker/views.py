@@ -16,7 +16,6 @@ def tracker_questions_view(request):
             "id": cat.id,
             "title": cat.title,
             "description": cat.description,
-            "order": getattr(cat, "order", 0),  # Add this line
             "questions": [
                 {
                     "id": q.id,
@@ -302,6 +301,53 @@ def submit_tracker_response_view(request):
                     )
                     uploaded_files.append(file_upload)
         
+        # --- Set user_status from 'Are you PRESENTLY employed?' (ID 21 or text) ---
+        present_employed = answers.get('21') or answers.get(21)
+        if present_employed is None:
+            for k, v in answers.items():
+                if isinstance(k, str) and 'presently employed' in k.lower():
+                    present_employed = v
+                    break
+        if present_employed is not None:
+            val = str(present_employed).strip().lower()
+            if val == 'yes':
+                user.user_status = 'employed'
+            elif val == 'no':
+                user.user_status = 'unemployed'
+            user.save()
+
+        # --- Set pursue_further_study from 'Did you pursue futher study?' (ID 22 or text) ---
+        pursue_study = answers.get('22') or answers.get(22)
+        if pursue_study is None:
+            for k, v in answers.items():
+                if isinstance(k, str) and 'pursue' in k.lower() and 'study' in k.lower():
+                    pursue_study = v
+                    break
+        if pursue_study is not None:
+            val = str(pursue_study).strip().lower()
+            if val == 'yes':
+                user.pursue_further_study = 'yes'
+            elif val == 'no':
+                user.pursue_further_study = 'no'
+            user.save()
+
+        # --- Set position_current from 'Current Position' (ID 26 or text) ---
+        position_answer = answers.get('26') or answers.get(26)
+        if position_answer is None:
+            for k, v in answers.items():
+                if isinstance(k, str) and 'current position' in k.lower():
+                    position_answer = v
+                    break
+        if position_answer is not None:
+            user.position_current = str(position_answer).strip()
+            user.save()
+        
+        # --- Set job_code from tracker response (Job Code key) ---
+        job_code = answers.get('Job Code') or answers.get('job_code')
+        if job_code is not None:
+            user.job_code = str(job_code).strip()
+            user.save()
+
         # Create a thank you notification
         Notification.objects.create(
             user=user,
@@ -310,178 +356,6 @@ def submit_tracker_response_view(request):
             notifi_content=f'Thank you {user.f_name} {user.l_name} for completing the alumni tracker form. Your response has been recorded successfully.',
             notif_date=timezone.now()
         )
-        
-        # --- Begin statistics mapping logic ---
-        from apps.shared.models import Standard, Suc, Qpro, Ched, Aacup, InfoTechJob, InfoSystemJob, CompTechJob
-        
-        # Helper: get answer by label or question id
-        def get_answer(label_or_id):
-            return answers.get(label_or_id) or answers.get(str(label_or_id))
-
-        # --- PATCH: Always use Q21 for employment status ---
-        # Q21: Are you PRESENTLY employed ?
-        q21_employment = get_answer(21)
-        if q21_employment:
-            employment_status = q21_employment.strip().lower()
-            # Normalize to 'employed' or 'unemployed'
-            if employment_status in ['yes', 'employed', 'presently employed', 'currently employed']:
-                employment_status = 'employed'
-            elif employment_status in ['no', 'unemployed', 'not employed']:
-                employment_status = 'unemployed'
-        else:
-            # Fallback to previous logic
-            employment_status = get_answer('Status') or get_answer('status')
-        # Save to user model
-        user.user_status = employment_status
-        user.save()
-        # Extract relevant answers
-        course = getattr(user, 'course', None) or get_answer('Program Name')
-        job_title = get_answer('Current Position') or get_answer('Position current') or get_answer('position')
-        salary = get_answer('Salary current') or get_answer('salary')
-        further_study = get_answer('Pursue further study') or get_answer('further study')
-        # Normalize further_study to 'yes' or 'no'
-        if further_study:
-            val = str(further_study).strip().lower()
-            if val in ['yes', 'true', '1']:
-                further_study = 'yes'
-            elif val in ['no', 'false', '0']:
-                further_study = 'no'
-            else:
-                further_study = val  # fallback to raw answer
-        self_employed = get_answer('Self-employed') or get_answer('self employed')
-        awards = get_answer('Awards') or get_answer('awards')
-        gov_position = get_answer('Key position in gov offices') or get_answer('key position')
-        high_position = get_answer('High position') or get_answer('high position')
-        # Use job_alignment_mapping.xlsx for job alignment
-        from job_alignment import is_job_aligned_excel
-        job_code = get_answer('Job Code') or get_answer('job_code')
-        # Suc: job_alignment_count
-        if is_job_aligned_excel(course, job_code):
-            suc.job_alignment_count += 1
-        # Ched: job_alignment_count
-        if is_job_aligned_excel(course, job_code):
-            ched.job_alignment_count += 1
-        # Create or update Suc
-        suc = Suc.objects.create(
-            standard=None,  # Will be set after Standard is created
-            info_tech_jobs=infotechjob,
-            info_system_jobs=infosystemjob,
-            comp_tech_jobs=comptechjob
-        )
-        # Create or update Qpro
-        qpro = Qpro.objects.create(
-            standard=None  # Will be set after Standard is created
-        )
-        # Create or update Ched
-        ched = Ched.objects.create(
-            standard=None  # Will be set after Standard is created
-        )
-        # Create or update Aacup
-        aacup = Aacup.objects.create(
-            standard=None  # Will be set after Standard is created
-        )
-        # Create Standard and link all
-        standard = Standard.objects.create(
-            tracker_form=None,  # Set if you have a TrackerForm instance
-            qpro=qpro,
-            suc=suc,
-            aacup=aacup,
-            ched=ched
-        )
-        # Update related models with standard
-        suc.standard = standard
-        suc.save()
-        qpro.standard = standard
-        qpro.save()
-        ched.standard = standard
-        ched.save()
-        aacup.standard = standard
-        aacup.save()
-        # Optionally, update fields in these models with extracted answers as needed
-        # --- End statistics mapping logic ---
-        
-        # --- Begin statistics aggregation logic ---
-        # Suc: average_salary, job_alignment_count, employment_status_count, self_employed_count
-        import re
-        def parse_salary(val):
-            if not val:
-                return None
-            try:
-                # Remove non-numeric characters
-                return float(re.sub(r'[^0-9.]', '', str(val)))
-            except Exception:
-                return None
-        # Get all TrackerResponses for this Suc (by job alignment)
-        all_responses = TrackerResponse.objects.filter(user__course=user.course)
-        salaries = [parse_salary(r.answers.get('Salary current') or r.answers.get('salary')) for r in all_responses]
-        salaries = [s for s in salaries if s is not None]
-        if salaries:
-            suc.average_salary = sum(salaries) / len(salaries)
-        # Job alignment: increment if job_title matches any job model
-        if job_title and (comptechjob or infotechjob or infosystemjob):
-            suc.job_alignment_count += 1
-        # Employment status: increment if employed
-        if employment_status and employment_status.lower() in ['employed', 'self-employed']:
-            suc.employment_status_count += 1
-        # Self-employed: increment if self_employed is true/yes
-        if self_employed and str(self_employed).lower() in ['yes', 'true', '1']:
-            suc.self_employed_count += 1
-        suc.save()
-        # Qpro: further_study_count
-        if further_study and str(further_study).lower() in ['yes', 'true', '1']:
-            qpro.further_study_count += 1
-            qpro.save()
-        # Ched: awards_count, gov_position_count, job_alignment_count, self_employed_count, job links
-        if awards:
-            ched.awards_count += 1
-        if gov_position:
-            ched.gov_position_count += 1
-        # Job alignment: increment if job_title matches any job model
-        if job_title and (comptechjob or infotechjob or infosystemjob):
-            ched.job_alignment_count += 1
-            ched.comp_tech_jobs = comptechjob
-            ched.info_tech_jobs = infotechjob
-            ched.info_system_jobs = infosystemjob
-        # Self-employed: increment if self_employed is true/yes
-        if self_employed and str(self_employed).lower() in ['yes', 'true', '1']:
-            ched.self_employed_count += 1
-        ched.save()
-        # Aacup: high_position_count
-        if high_position or gov_position:
-            aacup.high_position_count += 1
-            aacup.save()
-        # --- End statistics aggregation logic ---
-        
-        # --- Begin user profile sync logic ---
-        # Map tracker answers to user fields
-        user_fields_map = {
-            'user_status': employment_status,
-            'salary_current': salary,
-            'pursue_further_study': further_study,
-            'awards_recognition_current': awards,
-            'company_name_current': get_answer('Company Name') or get_answer('company'),
-            'position_current': get_answer('Current Position') or get_answer('Position current') or get_answer('position'),
-            'sector_current': get_answer('Sector') or get_answer('sector'),
-            'employment_duration_current': get_answer('Employment Duration') or get_answer('employment duration'),
-            'supporting_document_current': get_answer('Supporting Document') or get_answer('supporting document'),
-            'supporting_document_awards_recognition': get_answer('Supporting Document Awards') or get_answer('supporting document awards'),
-            'unemployment_reason': get_answer('Unemployment Reason') or get_answer('unemployment reason'),
-            'school_name': get_answer('School Name') or get_answer('school name'),
-            'high_position': high_position,
-            'gov_position': gov_position,
-        }
-        for field, value in user_fields_map.items():
-            if value is not None:
-                setattr(user, field, value)
-        # Save high position/government position if indicated
-        from apps.shared.models import HighPosition
-        if high_position or gov_position:
-            HighPosition.objects.create(
-                aacup=aacup,
-                tracker_form=None  # Optionally set tracker_form if available
-            )
-        user.save()
-        # --- End user profile sync logic ---
         
         return JsonResponse({
             'success': True, 

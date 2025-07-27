@@ -6,28 +6,18 @@ class AccountType(models.Model):
     peso = models.BooleanField()
     user = models.BooleanField()
     coordinator = models.BooleanField()
+    ojt = models.BooleanField(default=False)  # Added for OJT account type with default
+
+
 
 class Aacup(models.Model):
     aacup_id = models.AutoField(primary_key=True)
     standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='aacups')
-    # Aggregate fields
-    high_position_count = models.IntegerField(default=0)
-    awards_count = models.IntegerField(default=0)
-    self_employed_count = models.IntegerField(default=0)
-    entrepreneurship_count = models.IntegerField(default=0)
 
 class Ched(models.Model):
     ched_id = models.AutoField(primary_key=True)
     standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='cheds')
-    # Aggregate fields
-    awards_count = models.IntegerField(default=0)
-    gov_position_count = models.IntegerField(default=0)
-    further_study_count = models.IntegerField(default=0)
-    self_employed_count = models.IntegerField(default=0)
     job_alignment_count = models.IntegerField(default=0)
-    info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='ched_infotechjobs', null=True, blank=True)
-    info_system_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='ched_infosystemjobs', null=True, blank=True)
-    comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='ched_comptechjobs', null=True, blank=True)
 
 class Comment(models.Model):
     comment_id = models.AutoField(primary_key=True)
@@ -125,11 +115,6 @@ class Post(models.Model):
 class Qpro(models.Model):
     qpro_id = models.AutoField(primary_key=True)
     standard = models.ForeignKey('Standard', on_delete=models.CASCADE, related_name='qpros')
-    # Aggregate fields
-    further_study_count = models.IntegerField(default=0)
-    employed_count = models.IntegerField(default=0)
-    unemployed_count = models.IntegerField(default=0)
-    current_position = models.CharField(max_length=255, null=True, blank=True)
 
 class Repost(models.Model):
     repost_id = models.AutoField(primary_key=True)
@@ -140,10 +125,10 @@ class Repost(models.Model):
 class Standard(models.Model):
     standard_id = models.AutoField(primary_key=True)
     tracker_form = models.ForeignKey('TrackerForm', on_delete=models.CASCADE, related_name='standards')
-    qpro = models.ForeignKey('Qpro', on_delete=models.CASCADE, related_name='standards')
-    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='standards')
-    aacup = models.ForeignKey('Aacup', on_delete=models.CASCADE, related_name='standards')
-    ched = models.ForeignKey('Ched', on_delete=models.CASCADE, related_name='standards')
+    qpro = models.ForeignKey('Qpro', on_delete=models.CASCADE, related_name='standards', null=True, blank=True)
+    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='standards', null=True, blank=True)
+    aacup = models.ForeignKey('Aacup', on_delete=models.CASCADE, related_name='standards', null=True, blank=True)
+    ched = models.ForeignKey('Ched', on_delete=models.CASCADE, related_name='standards', null=True, blank=True)
 
 class Suc(models.Model):
     suc_id = models.AutoField(primary_key=True)
@@ -151,12 +136,6 @@ class Suc(models.Model):
     info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='suc_infotechjobs')
     info_system_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='suc_infosystemjobs')
     comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='suc_comptechjobs')
-    # Aggregate fields
-    average_salary = models.FloatField(null=True, blank=True)
-    job_alignment_count = models.IntegerField(default=0)
-    employment_status_count = models.IntegerField(default=0)
-    self_employed_count = models.IntegerField(default=0)
-    further_study_count = models.IntegerField(default=0)
 
 class TrackerForm(models.Model):
     tracker_form_id = models.AutoField(primary_key=True)
@@ -203,6 +182,8 @@ class User(models.Model):
     pursue_further_study = models.CharField(max_length=10, null=True, blank=True)
     date_started = models.DateField(null=True, blank=True)
     school_name = models.CharField(max_length=255, null=True, blank=True)
+    job_code = models.CharField(max_length=20, null=True, blank=True)
+    ojtstatus = models.CharField(max_length=50, null=True, blank=True)
     USERNAME_FIELD = 'acc_username'
     REQUIRED_FIELDS = []
 
@@ -230,6 +211,16 @@ class TrackerResponse(models.Model):
     answers = models.JSONField()  # {question_id: answer}
     submitted_at = models.DateTimeField(auto_now_add=True)
 
+# OJT-specific models
+class OJTImport(models.Model):
+    import_id = models.AutoField(primary_key=True)
+    coordinator = models.CharField(max_length=100)  # Coordinator who imported
+    batch_year = models.IntegerField()
+    course = models.CharField(max_length=100)
+    import_date = models.DateTimeField(auto_now_add=True)
+    file_name = models.CharField(max_length=255)
+    records_imported = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, default='Completed')  # Completed, Failed, Partial
 class TrackerFileUpload(models.Model):
     response = models.ForeignKey(TrackerResponse, on_delete=models.CASCADE, related_name='files')
     question_id = models.IntegerField()  # ID of the question this file answers
