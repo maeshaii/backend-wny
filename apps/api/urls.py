@@ -7,6 +7,7 @@ from .views import CustomTokenObtainPairView, send_reminder_view, notifications_
 from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view, tracker_accepting_responses_view, update_tracker_accepting_responses_view, get_active_tracker_form, file_upload_stats_view
 from apps.alumni_users.views import alumni_list_view, alumni_detail_view
 from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel
+from .views import *
 
 urlpatterns = [
     path('csrf/', views.get_csrf_token, name='get_csrf_token'),
@@ -47,6 +48,9 @@ urlpatterns = [
     path('tracker/accepting/<int:tracker_form_id>/', tracker_accepting_responses_view, name='tracker_accepting_responses'),
     path('tracker/update-accepting/<int:tracker_form_id>/', update_tracker_accepting_responses_view, name='update_tracker_accepting_responses'),
     path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
+    path('admin/<int:user_id>/profile_bio/', profile_bio_view, name='profile_bio_view'),
+    path('shared/profile/update/', profile_update_view, name='profile_update_view'),
+    path('resume/update/', update_resume, name='update_resume'),
     
 ]
 

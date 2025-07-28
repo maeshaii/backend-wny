@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.core.files.storage import default_storage
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -13,12 +15,13 @@ from datetime import datetime
 from rest_framework_simplejwt.tokens import RefreshToken
 import pandas as pd
 import io
+import os
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from collections import Counter
 from apps.shared.models import Question
 from django.core.mail import send_mail
 from django.utils import timezone
-from apps.shared.models import Notification, User
+from apps.shared.models import *
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -63,6 +66,7 @@ def login_view(request):
                     'id': user.user_id,
                     'name': f"{user.f_name} {user.l_name}",
                     'year_graduated': user.year_graduated,
+                    'profile_bio': user.profile_bio,  # <-- Add this line
                     'account_type': {
                         'admin': user.account_type.admin,
                         'peso': user.account_type.peso,
@@ -675,3 +679,96 @@ def ojt_by_year_view(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT"])
+def profile_bio_view(request, user_id):
+    try:
+        user = User.objects.get(user_id=user_id)
+        if request.method == "GET":
+            return JsonResponse({'profile_bio': user.profile_bio or ''})
+        elif request.method == "PUT":
+            data = json.loads(request.body)
+            user.profile_bio = data.get('profile_bio', '')
+            user.save()
+            return JsonResponse({'profile_bio': user.profile_bio})
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def profile_update_view(request):
+    user_id = request.GET.get('user_id')
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
+
+    # ✅ Handle profile picture upload
+    if 'profile_pic' in request.FILES:
+        user.profile_pic = request.FILES['profile_pic']
+
+    # ✅ Update profile bio only if provided
+    new_bio = request.POST.get('bio')
+    if new_bio is not None:
+        user.profile_bio = new_bio
+
+    # ✅ Save user changes
+    user.save()
+
+    # ✅ Return updated user info
+    return JsonResponse({
+        'success': True,
+        'message': 'Profile updated successfully.',
+        'user': {
+            'id': user.user_id,
+            'name': f"{user.f_name} {user.l_name}",
+            'profile_pic': user.profile_pic.url if user.profile_pic else '',
+            'profile_bio': user.profile_bio or '',
+        }
+    })
+
+from django.http import QueryDict
+
+@csrf_exempt
+def update_resume(request):
+    user_id = request.GET.get('user_id')
+
+    if not user_id:
+        return JsonResponse({"error": "Missing user_id"}, status=400)
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    if request.method in ['POST', 'PUT']:
+        resume_file = request.FILES.get('resume')
+        if not resume_file:
+            return JsonResponse({"error": "No resume file uploaded"}, status=400)
+
+        # Optional: File size limit check
+        if resume_file.size > 10 * 1024 * 1024:
+            return JsonResponse({"error": "Resume file exceeds 10MB limit"}, status=400)
+
+        filename = default_storage.save(f"resumes/{user_id}_{resume_file.name}", resume_file)
+        user.profile_resume = default_storage.url(filename)
+        user.save()
+        return JsonResponse({
+    "message": "Resume uploaded",
+    "resume": str(user.profile_resume.url if user.profile_resume else "")
+})
+
+
+    elif request.method == 'DELETE':
+        if user.profile_resume:
+            file_path = os.path.join(settings.MEDIA_ROOT, user.profile_resume.lstrip('/'))
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            user.profile_resume = None
+            user.save()
+            return JsonResponse({"message": "Resume deleted"})
+        return JsonResponse({"error": "No resume found"}, status=400)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
