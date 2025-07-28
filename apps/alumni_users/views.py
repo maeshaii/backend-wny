@@ -63,7 +63,9 @@ def alumni_detail_view(request, user_id):
         data = {
             'id': user.user_id,
             'ctu_id': user.acc_username,
+            'name': f"{get_field('f_name', 'first name')} {get_field('m_name', 'middle name') or ''} {get_field('l_name', 'last name')}".strip(),
             'first_name': get_field('f_name', 'first name'),
+            'profile_bio': user.profile_bio,
             'middle_name': get_field('m_name', 'middle name'),
             'last_name': get_field('l_name', 'last name'),
             'course': get_field('course', 'course'),
