@@ -399,7 +399,7 @@ def update_tracker_accepting_responses_view(request, tracker_form_id):
 @csrf_exempt
 @require_http_methods(["GET"])
 def get_active_tracker_form(request):
-    form = TrackerForm.objects.order_by('-tracker_form_id').first()  # or your own logic
+    form = TrackerForm.objects.order_by('-id').first()  # Fixed: use 'id' instead of 'tracker_form_id'
     if form:
         return JsonResponse({'tracker_form_id': form.pk})
     return JsonResponse({'tracker_form_id': None}, status=404)

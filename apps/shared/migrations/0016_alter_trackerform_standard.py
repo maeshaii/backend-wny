@@ -14,7 +14,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='trackerform',
             name='standard',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='tracker_forms', to='shared.standard'),
-            preserve_default=False,
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='tracker_forms', to='shared.standard'),
+        ),
+        migrations.RunSQL(
+            # Update existing TrackerForm records to use the first available Standard
+            sql="UPDATE shared_trackerform SET standard_id = (SELECT MIN(standard_id) FROM shared_standard) WHERE standard_id IS NULL;",
+            reverse_sql="UPDATE shared_trackerform SET standard_id = NULL;"
+        ),
+        migrations.AlterField(
+            model_name='trackerform',
+            name='standard',
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tracker_forms', to='shared.standard'),
         ),
     ]
