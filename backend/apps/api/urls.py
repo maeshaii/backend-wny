@@ -6,7 +6,8 @@ from apps.tracker.views import tracker_questions_view, tracker_responses_view, a
 from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view
 from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view, tracker_accepting_responses_view, update_tracker_accepting_responses_view, get_active_tracker_form, file_upload_stats_view
 from apps.alumni_users.views import alumni_list_view, alumni_detail_view
-from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel, export_ojt_completed_excel
+from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel, export_ojt_completed_excel, export_ojt_completed_and_remove_extract
+from apps.ojt_users.views import send_ojt_completed_notification_to_admin, debug_admin_users
 
 urlpatterns = [
     path('csrf/', views.get_csrf_token, name='get_csrf_token'),
@@ -21,6 +22,9 @@ urlpatterns = [
     path('import-alumni/', import_alumni_excel, name='import_alumni_excel'),
     path('import-exported-alumni/', import_exported_alumni_excel, name='import_exported_alumni_excel'),
     path('export-ojt-completed/', export_ojt_completed_excel, name='export_ojt_completed_excel'),
+    path('export-ojt-completed-and-remove/', export_ojt_completed_and_remove_extract, name='export_ojt_completed_and_remove_extract'),
+    path('ojt/send-notification-to-admin/', send_ojt_completed_notification_to_admin, name='send_ojt_completed_notification_to_admin'),
+    path('debug/admin-users/', debug_admin_users, name='debug_admin_users'),
     
     # OJT-specific routes for coordinators
     path('ojt/import/', import_ojt_view, name='import_ojt'),

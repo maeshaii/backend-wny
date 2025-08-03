@@ -12,7 +12,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [selectedBatchYear, setSelectedBatchYear] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState('');
 
   useEffect(() => {
     const loadStats = async () => {
@@ -317,40 +316,6 @@ const styles: { [key: string]: React.CSSProperties } = {
   }
 };
 
-const modalStyles: { [key: string]: React.CSSProperties } = {
-  overlay: {
-    position: 'fixed',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000
-  },
-  modal: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '12px',
-    width: '350px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
-  },
-  dropdown: {
-    padding: '8px',
-    borderRadius: '8px',
-    border: '1px solid #ccc'
-  },
-  button: {
-    marginTop: '15px',
-    padding: '10px',
-    backgroundColor: '#4f46e5',
-    color: 'white',
-    border: 'none',
-    borderRadius: '10px',
-    cursor: 'pointer'
-  }
-};
+
 
 export default App;

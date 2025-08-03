@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 // import { fetchNotifications, deleteNotifications } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import AlumniTopBar from '../../alumni/AlumniTopBar';
 
 const AdminNotificationPage: React.FC = () => {
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [notifications] = useState<any[]>([]);
+  const [loading] = useState(true);
   const [selected, setSelected] = useState<number[]>([]);
   const [search, setSearch] = useState('');
   const [showProfile, setShowProfile] = useState(false);

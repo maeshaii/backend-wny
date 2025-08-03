@@ -1,7 +1,7 @@
 import React, { useState, useEffect, ChangeEvent, useRef } from 'react';
 import './Tracker.css';
 import ctulogo from '../../../images/ctulogo.png';
-import { fetchAlumniByYear, sendReminders, fetchAlumniList } from '../../../services/api';
+import { sendReminders, fetchAlumniList } from '../../../services/api';
 
 interface AlumniUser {
   id: number;
@@ -31,9 +31,7 @@ const Settings: React.FC = () => {
   const [selectedCourse, setSelectedCourse] = useState<string>('All');
   const [selectedRespondedCourse, setSelectedRespondedCourse] = useState<string>('All');
 
-  // Calculate target batch year (current year - 2)
-  const currentYear = new Date().getFullYear();
-  const targetBatchYear = currentYear - 2;
+
 
   // Fetch alumni users and tracker responses on mount
   useEffect(() => {

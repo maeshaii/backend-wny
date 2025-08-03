@@ -395,7 +395,7 @@ const Question: React.FC<QuestionProps> = ({ previewModeFromParent, userId }) =>
   const getInputProps = (q: QuestionItem) => {
     const text = q.text.toLowerCase();
     if (text.includes('phone') || text.includes('contact')) {
-      return { type: 'tel', pattern: '^(09|\+639)\d{9}$|^\d{7}$', placeholder: 'e.g. 09123456789 or 1234567', validate: (v: string) => /^(09|\+639)\d{9}$|^\d{7}$/.test(v) ? '' : 'Invalid Philippine phone/landline number.' };
+      return { type: 'tel', pattern: '^(09|\\+639)\\d{9}$|^\\d{7}$', placeholder: 'e.g. 09123456789 or 1234567', validate: (v: string) => /^(09|\\+639)\\d{9}$|^\\d{7}$/.test(v) ? '' : 'Invalid Philippine phone/landline number.' };
     }
     if (text.includes('email')) {
       return { type: 'email', placeholder: 'e.g. user@email.com', validate: (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? '' : 'Invalid email address.' };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchOJTByYear, exportOJTCompleted } from '../../services/api';
+import { fetchOJTByYear, exportOJTCompletedAndRemove } from '../../services/api';
 
 interface DetailsTableProps {
   onBack: () => void;
@@ -49,7 +49,7 @@ export default function DetailsTable({ onBack, selectedYear }: DetailsTableProps
     });
   };
 
-  // Handle export of completed OJT data
+  // Handle export of completed OJT data and remove from extract
   const handleSendToAdmin = async () => {
     try {
       // Filter only completed OJT records
@@ -60,7 +60,7 @@ export default function DetailsTable({ onBack, selectedYear }: DetailsTableProps
         return;
       }
 
-      const result = await exportOJTCompleted(
+      const result = await exportOJTCompletedAndRemove(
         selectedYear?.toString(),
         completedRecords[0]?.course || 'BSIT',
         coordinatorUsername

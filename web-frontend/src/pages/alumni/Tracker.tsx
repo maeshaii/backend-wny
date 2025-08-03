@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Question from '../admin/tracker/questions';
-import { fetchTrackerResponsesByUser, fetchAlumniDetails } from '../../services/api';
+import { fetchAlumniDetails } from '../../services/api';
 
 // Helper to get query params
 function useQuery() {

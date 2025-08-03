@@ -1,6 +1,6 @@
 // components/GenerateStatsModal.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchAlumniStatistics, fetchAlumniEmploymentStats, generateSpecificStats, exportDetailedAlumniData } from '../services/api';
+import { fetchAlumniStatistics, generateSpecificStats, exportDetailedAlumniData } from '../services/api';
 import {
   ResponsiveContainer,
   BarChart,
@@ -209,36 +209,7 @@ const GenerateStatsModal: React.FC<Props> = ({ onClose, onGenerate }) => {
     return { barData, pieData };
   };
 
-  // Function to generate chart images
-  const generateChartImages = async () => {
-    const images: { barChart?: string; pieChart?: string } = {};
-    
-    try {
-      // Generate bar chart image
-      if (barChartRef.current) {
-        const canvas = await html2canvas(barChartRef.current, {
-          background: 'white',
-          useCORS: true,
-          allowTaint: true
-        });
-        images.barChart = canvas.toDataURL('image/png');
-      }
-      
-      // Generate pie chart image
-      if (pieChartRef.current) {
-        const canvas = await html2canvas(pieChartRef.current, {
-          background: 'white',
-          useCORS: true,
-          allowTaint: true
-        });
-        images.pieChart = canvas.toDataURL('image/png');
-      }
-    } catch (error) {
-      console.error('Error generating chart images:', error);
-    }
-    
-    return images;
-  };
+
 
   // Add this helper function before handleExportCompleteData
   const renderAndCaptureChartImages = async (sectionType: string, stats: any): Promise<{ barChart?: string; pieChart?: string }> => {
@@ -1075,73 +1046,7 @@ const dropdown: React.CSSProperties = {
   backgroundColor: 'white'
 };
 
-const statsPreview: React.CSSProperties = {
-  marginTop: '20px',
-  padding: '15px',
-  backgroundColor: '#f8f9fa',
-  borderRadius: '8px',
-  border: '1px solid #e9ecef'
-};
 
-const statsTitle: React.CSSProperties = {
-  fontSize: '16px',
-  fontWeight: '600',
-  marginBottom: '15px',
-  color: '#333'
-};
-
-const statsGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-  gap: '10px'
-};
-
-const chartsContainer: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-  gap: '20px',
-  marginTop: '20px'
-};
-
-const chartSection: React.CSSProperties = {
-  backgroundColor: 'white',
-  padding: '15px',
-  borderRadius: '8px',
-  border: '1px solid #e9ecef'
-};
-
-const chartTitle: React.CSSProperties = {
-  fontSize: '14px',
-  fontWeight: '600',
-  marginBottom: '10px',
-  color: '#333',
-  textAlign: 'center'
-};
-
-const chartWrapper: React.CSSProperties = {
-  width: '100%',
-  height: '200px'
-};
-
-const statCard: React.CSSProperties = {
-  backgroundColor: 'white',
-  padding: '12px',
-  borderRadius: '6px',
-  textAlign: 'center',
-  border: '1px solid #dee2e6'
-};
-
-const statLabel: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#666',
-  marginBottom: '4px'
-};
-
-const statValue: React.CSSProperties = {
-  fontSize: '18px',
-  fontWeight: 'bold',
-  color: '#1D4E89'
-};
 
 const buttonGroup: React.CSSProperties = {
   display: 'flex',

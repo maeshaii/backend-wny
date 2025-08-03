@@ -18,6 +18,7 @@ const AdminProfilePage: React.FC = () => {
     navigate('/login');
   };
 
+
   const [profileBio, setProfileBio] = useState('');
   const [isBioModalOpen, setIsBioModalOpen] = useState(false);
   const [bioInput, setBioInput] = useState('');

@@ -651,7 +651,7 @@ const Responses: React.FC = () => {
                             
                             // Add files with images
                             let yPosition = 50;
-                            let processedFiles = 0;
+
                             
                             const processNextFile = (index: number) => {
                               if (index >= stat.files.length) {

@@ -226,4 +226,39 @@ export const exportOJTCompleted = async (batchYear?: string, course?: string, co
   }
 };
 
+// Export OJT data with completed status and remove from extract
+export const exportOJTCompletedAndRemove = async (batchYear?: string, course?: string, coordinatorUsername?: string) => {
+  try {
+    const params = new URLSearchParams();
+    if (batchYear) {
+      params.append('batch_year', batchYear);
+    }
+    if (course) {
+      params.append('course', course);
+    }
+    if (coordinatorUsername) {
+      params.append('coordinator_username', coordinatorUsername);
+    }
+
+    const response = await api.get(`export-ojt-completed-and-remove/?${params.toString()}`, {
+      responseType: 'blob',
+    });
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `ojt_completed_export${batchYear ? `_batch_${batchYear}` : ''}${course ? `_${course}` : ''}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Export error:', error);
+    return { success: false, message: 'Export failed' };
+  }
+};
+
 export default api;

@@ -11,7 +11,6 @@ interface AlumniTopBarProps {
 
 const AlumniTopBar: React.FC<AlumniTopBarProps> = ({ showProfile, setShowProfile, handleLogout, isAdmin, onTrackerClick }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   
   return (
     <div style={{ 
