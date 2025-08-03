@@ -21,7 +21,7 @@ urlpatterns = [
     path('export-alumni/', export_alumni_excel, name='export_alumni_excel'),
     path('import-alumni/', import_alumni_excel, name='import_alumni_excel'),
     path('import-exported-alumni/', import_exported_alumni_excel, name='import_exported_alumni_excel'),
-    
+     
     # OJT-specific routes for coordinators
     path('ojt/import/', import_ojt_view, name='import_ojt'),
     path('ojt/statistics/', ojt_statistics_view, name='ojt_statistics'),
@@ -49,8 +49,9 @@ urlpatterns = [
     path('tracker/update-accepting/<int:tracker_form_id>/', update_tracker_accepting_responses_view, name='update_tracker_accepting_responses'),
     path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
     path('admin/<int:user_id>/profile_bio/', profile_bio_view, name='profile_bio_view'),
-    path('shared/profile/update/', profile_update_view, name='profile_update_view'),
     path('resume/update/', update_resume, name='update_resume'),
-    
-]
+    path('resume/delete/', update_resume, name='delete_resume'),
+    path('api/alumni/profile/update/', update_alumni_profile),
+    path('search/', search_alumni, name='search_alumni'),
 
+]

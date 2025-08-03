@@ -5,8 +5,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import *
-from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse, OJTImport
+from apps.shared.models import User, AccountType, User, OJTImport, Notification
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -21,7 +20,13 @@ from collections import Counter
 from apps.shared.models import Question
 from django.core.mail import send_mail
 from django.utils import timezone
-from apps.shared.models import *
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Value, CharField
+from django.db.models.functions import Concat, Coalesce
+from rest_framework.decorators import api_view
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -425,6 +430,25 @@ def notifications_view(request):
     return JsonResponse({'success': True, 'notifications': notif_list})
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def users_list_view(request):
+    current_user_id = request.GET.get('current_user_id')
+    try:
+        # Exclude admin users and the current logged-in user
+        users = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
+        users_data = [
+            {
+                'id': u.user_id,
+                'name': f"{u.f_name} {u.l_name}",
+                'profile_pic': u.profile_pic.url if u.profile_pic else None,
+            }
+            for u in users
+        ]
+        return JsonResponse({'success': True, 'users': users_data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def delete_notifications_view(request):
     import json
@@ -695,41 +719,7 @@ def profile_bio_view(request, user_id):
     except User.DoesNotExist:
         return JsonResponse({'error': 'User not found'}, status=404)
 
-@csrf_exempt
-@require_http_methods(["PUT"])
-def profile_update_view(request):
-    user_id = request.GET.get('user_id')
 
-    try:
-        user = User.objects.get(user_id=user_id)
-    except User.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
-
-    # ✅ Handle profile picture upload
-    if 'profile_pic' in request.FILES:
-        user.profile_pic = request.FILES['profile_pic']
-
-    # ✅ Update profile bio only if provided
-    new_bio = request.POST.get('bio')
-    if new_bio is not None:
-        user.profile_bio = new_bio
-
-    # ✅ Save user changes
-    user.save()
-
-    # ✅ Return updated user info
-    return JsonResponse({
-        'success': True,
-        'message': 'Profile updated successfully.',
-        'user': {
-            'id': user.user_id,
-            'name': f"{user.f_name} {user.l_name}",
-            'profile_pic': user.profile_pic.url if user.profile_pic else '',
-            'profile_bio': user.profile_bio or '',
-        }
-    })
-
-from django.http import QueryDict
 
 @csrf_exempt
 def update_resume(request):
@@ -753,17 +743,17 @@ def update_resume(request):
             return JsonResponse({"error": "Resume file exceeds 10MB limit"}, status=400)
 
         filename = default_storage.save(f"resumes/{user_id}_{resume_file.name}", resume_file)
-        user.profile_resume = default_storage.url(filename)
+        user.profile_resume = filename
         user.save()
         return JsonResponse({
-    "message": "Resume uploaded",
-    "resume": str(user.profile_resume.url if user.profile_resume else "")
-})
+            "message": "Resume uploaded",
+            "resume": user.profile_resume.url if user.profile_resume else ""
+        })
 
 
     elif request.method == 'DELETE':
         if user.profile_resume:
-            file_path = os.path.join(settings.MEDIA_ROOT, user.profile_resume.lstrip('/'))
+            file_path = os.path.join(settings.MEDIA_ROOT, user.profile_resume.name)
             if os.path.exists(file_path):
                 os.remove(file_path)
             user.profile_resume = None
@@ -772,3 +762,66 @@ def update_resume(request):
         return JsonResponse({"error": "No resume found"}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
+
+@api_view(['PUT'])
+@parser_classes([MultiPartParser])
+def update_alumni_profile(request):
+    user_id = request.GET.get('user_id')
+    if not user_id:
+        return Response({'message': 'Missing user_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        alumni = alumni.objects.get(id=user_id)
+
+        bio = request.data.get('bio')
+        if bio is not None:
+            alumni.profile_bio = bio
+
+        if 'profile_pic' in request.FILES:
+            alumni.profile_pic = request.FILES['profile_pic']
+
+        alumni.save()
+
+        return Response({
+            'user': {
+                'id': alumni.id,
+                'name': alumni.name,
+                'profile_pic': alumni.profile_pic.url if alumni.profile_pic else None,
+                'bio': alumni.profile_bio,
+                # add more fields if needed
+            }
+        })
+
+    except alumni.DoesNotExist:
+        return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+
+@api_view(['GET'])
+def search_alumni(request):
+    query = request.GET.get('q', '').strip()
+    if not query:
+        return Response([])
+
+    # Combine first, middle (nullable), and last names
+    results = User.objects.annotate(
+        full_name=Concat(
+            'f_name',
+            Value(' '),
+            Coalesce('m_name', Value('')),
+            Value(' '),
+            'l_name',
+            output_field=CharField()
+        )
+    ).filter(full_name__icontains=query)[:10]
+
+    data = [{
+        'user_id': a.user_id,
+        'name': f"{a.f_name} {a.m_name or ''} {a.l_name}".strip(),
+        'course': a.course,
+        'year_graduated': a.year_graduated,
+        'profile_pic': a.profile_pic.url if a.profile_pic else None
+    } for a in results]
+
+    return Response(data)
+
+
