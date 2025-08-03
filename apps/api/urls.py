@@ -53,5 +53,15 @@ urlpatterns = [
     path('resume/delete/', update_resume, name='delete_resume'),
     path('api/alumni/profile/update/', update_alumni_profile),
     path('search/', search_alumni, name='search_alumni'),
-
+    
+    # Posts API endpoints
+    path('posts/', views.posts_view, name='posts'),
+    path('posts/<int:post_id>/like/', views.post_like_view, name='post_like'),
+    path('posts/<int:post_id>/comments/', views.post_comments_view, name='post_comments'),
+    path('posts/<int:post_id>/', views.post_delete_view, name='post_delete'),
+    path('posts/<int:post_id>/repost/', views.post_repost_view, name='post_repost'),
+    path('reposts/<int:repost_id>/', views.repost_delete_view, name='repost_delete'),
+    path('post-categories/', views.post_categories_view, name='post_categories'),
+    
 ]
+

@@ -109,9 +109,10 @@ class Post(models.Model):
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='posts')
     post_cat = models.ForeignKey('PostCategory', on_delete=models.CASCADE, related_name='posts')
     post_title = models.CharField(max_length=255)
-    post_image = models.CharField(max_length=255)
+    post_image = models.ImageField(upload_to='post_images/', null=True, blank=True)
     post_content = models.TextField()
     type = models.CharField(max_length=50, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class Qpro(models.Model):
     qpro_id = models.AutoField(primary_key=True)

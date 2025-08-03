@@ -825,3 +825,371 @@ def search_alumni(request):
     return Response(data)
 
 
+@csrf_exempt
+@require_http_methods(["GET", "POST", "OPTIONS"])
+def posts_view(request):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    if request.method == "GET":
+        try:
+            # Get all posts with user and category information
+            posts = Post.objects.select_related('user', 'post_cat').order_by('-post_id')
+            posts_data = []
+            
+            for post in posts:
+                # Get repost information
+                reposts = Repost.objects.filter(post=post).select_related('user')
+                repost_data = []
+                
+                for repost in reposts:
+                    repost_data.append({
+                        'repost_id': repost.repost_id,
+                        'repost_date': repost.repost_date.isoformat(),
+                        'user': {
+                            'user_id': repost.user.user_id,
+                            'f_name': repost.user.f_name,
+                            'l_name': repost.user.l_name,
+                            'profile_pic': repost.user.profile_pic.url if repost.user.profile_pic else None,
+                        }
+                    })
+                
+                posts_data.append({
+                    'post_id': post.post_id,
+                    'post_title': post.post_title,
+                    'post_content': post.post_content,
+                    'post_image': post.post_image.url if post.post_image else None,
+                    'type': post.type,
+                    'created_at': post.created_at.isoformat() if hasattr(post, 'created_at') else None,
+                    'likes_count': post.likes.count(),
+                    'comments_count': post.comments.count(),
+                    'reposts_count': post.reposts.count(),
+                    'reposts': repost_data,
+                    'user': {
+                        'user_id': post.user.user_id,
+                        'f_name': post.user.f_name,
+                        'l_name': post.user.l_name,
+                        'profile_pic': post.user.profile_pic.url if post.user.profile_pic else None,
+                    },
+                    'category': {
+                        'post_cat_id': post.post_cat.post_cat_id,
+                        'events': post.post_cat.events,
+                        'announcements': post.post_cat.announcements,
+                        'donation': post.post_cat.donation,
+                        'personal': post.post_cat.personal,
+                    }
+                })
+            
+            return JsonResponse({'posts': posts_data})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            
+            # Get user from token
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return JsonResponse({'error': 'Authentication required'}, status=401)
+            
+            token = auth_header.split(' ')[1]
+            # Validate JWT token and get user
+            try:
+                from rest_framework_simplejwt.tokens import AccessToken
+                from django.contrib.auth import get_user_model
+                
+                # Decode the token
+                access_token = AccessToken(token)
+                user_id = access_token['user_id']
+                user = User.objects.get(user_id=user_id)
+            except Exception as e:
+                return JsonResponse({'error': 'Invalid token'}, status=401)
+            
+            # Create the post
+            post = Post.objects.create(
+                user=user,
+                post_cat_id=data.get('post_cat_id'),
+                post_title=data.get('post_title', ''),
+                post_content=data.get('post_content', ''),
+                post_image=data.get('post_image', ''),
+                type=data.get('type', 'personal')
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'post_id': post.post_id,
+                'message': 'Post created successfully'
+            })
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST", "DELETE", "OPTIONS"])
+def post_like_view(request, post_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "POST, DELETE, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        post = Post.objects.get(post_id=post_id)
+        
+        # Get user from token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            user = User.objects.get(user_id=user_id)
+        except Exception as e:
+            return JsonResponse({'error': 'Invalid token'}, status=401)
+        
+        if request.method == "POST":
+            # Like the post
+            like, created = Like.objects.get_or_create(user=user, post=post)
+            if created:
+                return JsonResponse({'success': True, 'message': 'Post liked'})
+            else:
+                return JsonResponse({'success': False, 'message': 'Post already liked'})
+        elif request.method == "DELETE":
+            # Unlike the post
+            try:
+                like = Like.objects.get(user=user, post=post)
+                like.delete()
+                return JsonResponse({'success': True, 'message': 'Post unliked'})
+            except Like.DoesNotExist:
+                return JsonResponse({'success': False, 'message': 'Post not liked'})
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "OPTIONS"])
+def post_comments_view(request, post_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        post = Post.objects.get(post_id=post_id)
+        
+        if request.method == "GET":
+            # Get comments for the post
+            comments = Comment.objects.filter(post=post).select_related('user').order_by('-date_created')
+            comments_data = []
+            
+            for comment in comments:
+                comments_data.append({
+                    'comment_id': comment.comment_id,
+                    'comment_content': comment.comment_content,
+                    'date_created': comment.date_created.isoformat(),
+                    'user': {
+                        'user_id': comment.user.user_id,
+                        'f_name': comment.user.f_name,
+                        'l_name': comment.user.l_name,
+                        'profile_pic': comment.user.profile_pic.url if comment.user.profile_pic else None,
+                    }
+                })
+            
+            return JsonResponse({'comments': comments_data})
+        elif request.method == "POST":
+            data = json.loads(request.body)
+            
+            # Get user from token
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return JsonResponse({'error': 'Authentication required'}, status=401)
+            
+            token = auth_header.split(' ')[1]
+            try:
+                from rest_framework_simplejwt.tokens import AccessToken
+                access_token = AccessToken(token)
+                user_id = access_token['user_id']
+                user = User.objects.get(user_id=user_id)
+            except Exception as e:
+                return JsonResponse({'error': 'Invalid token'}, status=401)
+            
+            # Create comment
+            comment = Comment.objects.create(
+                user=user,
+                post=post,
+                comment_content=data.get('comment_content', ''),
+                date_created=timezone.now()
+            )
+            
+            return JsonResponse({
+                'success': True, 
+                'message': 'Comment added',
+                'comment_id': comment.comment_id
+            })
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["DELETE", "OPTIONS"])
+def post_delete_view(request, post_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "DELETE, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        post = Post.objects.get(post_id=post_id)
+        
+        # Get user from token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            user = User.objects.get(user_id=user_id)
+        except Exception as e:
+            return JsonResponse({'error': 'Invalid token'}, status=401)
+        
+        # Check if user owns the post
+        if post.user.user_id != user.user_id:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+        
+        post.delete()
+        return JsonResponse({'success': True, 'message': 'Post deleted'})
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def post_categories_view(request):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken"
+        return response
+
+    try:
+        categories = PostCategory.objects.all()
+        categories_data = []
+        
+        for category in categories:
+            categories_data.append({
+                'post_cat_id': category.post_cat_id,
+                'events': category.events,
+                'announcements': category.announcements,
+                'donation': category.donation,
+                'personal': category.personal,
+            })
+        
+        return JsonResponse({'categories': categories_data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST", "OPTIONS"])
+def post_repost_view(request, post_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        post = Post.objects.get(post_id=post_id)
+        
+        # Get user from token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            user = User.objects.get(user_id=user_id)
+        except Exception as e:
+            return JsonResponse({'error': 'Invalid token'}, status=401)
+        
+        # Check if user already reposted this post
+        existing_repost = Repost.objects.filter(user=user, post=post).first()
+        if existing_repost:
+            return JsonResponse({'error': 'You have already reposted this'}, status=400)
+        
+        # Create repost
+        repost = Repost.objects.create(
+            user=user,
+            post=post,
+            repost_date=timezone.now()
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'repost_id': repost.repost_id,
+            'message': 'Post reposted successfully'
+        })
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["DELETE", "OPTIONS"])
+def repost_delete_view(request, repost_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "DELETE, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        repost = Repost.objects.get(repost_id=repost_id)
+        
+        # Get user from token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            user = User.objects.get(user_id=user_id)
+        except Exception as e:
+            return JsonResponse({'error': 'Invalid token'}, status=401)
+        
+        # Check if user owns the repost
+        if repost.user.user_id != user.user_id:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+        
+        repost.delete()
+        return JsonResponse({'success': True, 'message': 'Repost deleted'})
+    except Repost.DoesNotExist:
+        return JsonResponse({'error': 'Repost not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
