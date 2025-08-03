@@ -71,4 +71,4 @@ def generate_ojt_statistics_view(request):
 
 def export_detailed_ojt_data(request):
     """View for exporting detailed OJT data"""
-     return JsonResponse({'message': 'OJT data export endpoint'}) 
+     return JsonResponse({'message': 'OJT data export endpoint'})
