@@ -64,10 +64,6 @@ def ojt_statistics_view(request):
     """View for OJT statistics"""
     return render(request, 'ojt_stats/statistics.html')
 
-def generate_ojt_statistics_view(request):
-    """View for generating OJT statistics"""
-    return JsonResponse({'message': 'OJT statistics generation endpoint'})
-
 def export_detailed_ojt_data(request):
     """View for exporting detailed OJT data"""
     return JsonResponse({'message': 'OJT data export endpoint'}) 
