@@ -402,7 +402,17 @@ def get_active_tracker_form(request):
     form = TrackerForm.objects.order_by('-id').first()  # Fixed: use 'id' instead of 'tracker_form_id'
     if form:
         return JsonResponse({'tracker_form_id': form.pk})
-    return JsonResponse({'tracker_form_id': None}, status=404)
+    
+    # If no TrackerForm exists, create one automatically
+    try:
+        default_form = TrackerForm.objects.create(
+            title="CTU MAIN ALUMNI TRACKER",
+            description="Default tracker form for CTU alumni",
+            accepting_responses=True
+        )
+        return JsonResponse({'tracker_form_id': default_form.pk})
+    except Exception as e:
+        return JsonResponse({'tracker_form_id': None, 'error': str(e)}, status=500)
 
 @csrf_exempt
 @require_http_methods(["GET"])
