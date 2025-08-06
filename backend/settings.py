@@ -25,7 +25,9 @@ SECRET_KEY = 'django-insecure-+koo^iomvn9!og7s955%f0=o+$2)a6l)e*^g#ka&j0#fzyb(b1
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "0.0.0.0", "192.168.1.5"]
+
+# Accept requests from localhost, emulator, and all relevant LAN IPs (including mobile)
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -42,6 +44,7 @@ INSTALLED_APPS = [
     "apps.tracker",
     "apps.alumni_stats",
     "apps.alumni_users",
+    "apps.ojt_users",
     "rest_framework",
     "corsheaders",
 ]
@@ -63,7 +66,13 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:8000",
     "http://10.0.2.2:8000",
+
+    "http://192.168.1.27:8000",
+    "http://192.168.1.18:8000",
+    "http://192.168.254.135:8000",
+
     "http://192.168.1.5:8000",
+
 ]
 ROOT_URLCONF = 'backend.urls'
 
@@ -157,3 +166,6 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = 'shared.User'
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # or higher if needed
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB or higher
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB or higher

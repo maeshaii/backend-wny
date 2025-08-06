@@ -24,6 +24,8 @@ urlpatterns = [
     path('api/', include('apps.api.urls')),  # Make sure your app URL is included here
     path('api/statistics/', include('apps.alumni_stats.urls')),
     path('api/users/', include('apps.alumni_users.urls')),
+    path('api/ojt-users/', include('apps.ojt_users.urls')),
+    path('api/alumni/', include('apps.api.urls')),
 ]
 
 # Serve media files in development
