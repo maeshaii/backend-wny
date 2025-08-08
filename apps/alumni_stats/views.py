@@ -99,10 +99,15 @@ def generate_statistics_view(request):
         })
     
     elif stats_type == 'QPRO':
-        # QPRO: Employment statistics based on real data fields
+        # QPRO: Employment statistics based on real data fields and tracker answers
         employed = alumni_qs.filter(user_status__iexact='employed').count()  # user_status == 'employed'
         unemployed = alumni_qs.filter(user_status__iexact='unemployed').count()  # user_status == 'unemployed'
         employment_rate = (employed / total_alumni * 100) if total_alumni > 0 else 0
+        
+        # Use tracker answers for more detailed statistics
+        tracker_employed = alumni_qs.filter(q_employment_status__iexact='yes').count()
+        tracker_unemployed = alumni_qs.filter(q_employment_status__iexact='no').count()
+        
         return JsonResponse({
             'success': True,
             'type': 'QPRO',
@@ -110,6 +115,8 @@ def generate_statistics_view(request):
             'employment_rate': round(employment_rate, 2),
             'employed_count': employed,
             'unemployed_count': unemployed,
+            'tracker_employed_count': tracker_employed,
+            'tracker_unemployed_count': tracker_unemployed,
             # Real data fields
             'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
             'most_common_position': safe_mode(alumni_qs, 'position_current'),
@@ -125,23 +132,35 @@ def generate_statistics_view(request):
         })
     
     elif stats_type == 'CHED':
-        # CHED: Further study statistics based on real data fields
-        pursuing_study = alumni_qs.filter(pursue_further_study__iexact='yes').count()  # pursue_further_study == 'yes'
+        # CHED: Further study and job alignment statistics
+        pursuing_study = alumni_qs.filter(pursue_further_study__iexact='yes').count()
+        tracker_pursuing_study = alumni_qs.filter(q_pursue_study__iexact='yes').count()
+        
+        # Job alignment statistics using new fields
+        job_aligned = alumni_qs.filter(job_alignment_status='aligned').count()
+        self_employed = alumni_qs.filter(self_employed=True).count()
+        not_aligned = alumni_qs.filter(job_alignment_status='not_aligned').count()
+        
         # Aggregate job_alignment_count from Ched model
         from apps.shared.models import Standard, Ched
         ched_count = 0
-        # Get all Ched records and sum their job_alignment_count
         ched_records = Ched.objects.all()
         for ched in ched_records:
             ched_count += getattr(ched, 'job_alignment_count', 0)
+        
         return JsonResponse({
             'success': True,
             'type': 'CHED',
             'total_alumni': total_alumni,
             'pursuing_further_study': pursuing_study,
-            'post_graduate_degree': alumni_qs.filter(program__icontains='graduate').count(),  # program contains 'graduate'
+            'tracker_pursuing_study': tracker_pursuing_study,
+            'post_graduate_degree': alumni_qs.filter(program__icontains='graduate').count(),
             'further_study_rate': round((pursuing_study / total_alumni * 100), 2) if total_alumni > 0 else 0,
             'job_alignment_count': ched_count,
+            'job_aligned_count': job_aligned,
+            'self_employed_count': self_employed,
+            'not_aligned_count': not_aligned,
+            'job_alignment_rate': round((job_aligned / total_alumni * 100), 2) if total_alumni > 0 else 0,
             'most_common_school': safe_mode(alumni_qs, 'school_name'),
             'most_common_program': safe_mode(alumni_qs, 'program'),
             'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
@@ -153,14 +172,18 @@ def generate_statistics_view(request):
         })
     
     elif stats_type == 'SUC':
-        # SUC: High position and salary statistics based on real data fields
-        high_position = alumni_qs.filter(user_status__iexact='high position').count()  # user_status == 'high position'
+        # SUC: High position and salary statistics
+        high_position = alumni_qs.filter(high_position=True).count()
+        job_aligned = alumni_qs.filter(job_alignment_status='aligned').count()
+        
         return JsonResponse({
             'success': True,
             'type': 'SUC',
             'total_alumni': total_alumni,
             'high_position_count': high_position,
             'high_position_rate': round((high_position / total_alumni * 100), 2) if total_alumni > 0 else 0,
+            'job_aligned_count': job_aligned,
+            'job_alignment_rate': round((job_aligned / total_alumni * 100), 2) if total_alumni > 0 else 0,
             'average_salary': safe_mean(alumni_qs, 'salary_current'),
             'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
             'most_common_position': safe_mode(alumni_qs, 'position_current'),
@@ -174,13 +197,16 @@ def generate_statistics_view(request):
         })
     
     elif stats_type == 'AACUP':
-        # AACUP: Absorbed, employed, high position statistics based on real data fields
-        employed = alumni_qs.filter(user_status__iexact='employed').count()  # user_status == 'employed'
-        absorbed = alumni_qs.filter(user_status__iexact='absorb').count()  # user_status == 'absorb'
-        high_position = alumni_qs.filter(user_status__iexact='high position').count()  # user_status == 'high position'
+        # AACUP: Absorbed, employed, high position statistics
+        employed = alumni_qs.filter(user_status__iexact='employed').count()
+        absorbed = alumni_qs.filter(absorbed=True).count()
+        high_position = alumni_qs.filter(high_position=True).count()
+        self_employed = alumni_qs.filter(self_employed=True).count()
+        
         employment_rate = (employed / total_alumni * 100) if total_alumni > 0 else 0
         absorption_rate = (absorbed / total_alumni * 100) if total_alumni > 0 else 0
         high_position_rate = (high_position / total_alumni * 100) if total_alumni > 0 else 0
+        
         return JsonResponse({
             'success': True,
             'type': 'AACUP',
@@ -191,6 +217,7 @@ def generate_statistics_view(request):
             'employed_count': employed,
             'absorbed_count': absorbed,
             'high_position_count': high_position,
+            'self_employed_count': self_employed,
             'most_common_company': safe_mode(alumni_qs, 'company_name_current'),
             'most_common_position': safe_mode(alumni_qs, 'position_current'),
             'most_common_sector': safe_mode(alumni_qs, 'sector_current'),
