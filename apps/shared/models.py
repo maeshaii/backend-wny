@@ -382,6 +382,16 @@ class TrackerResponse(models.Model):
         user.save()
 
 # OJT-specific models
+class Follow(models.Model):
+    follow_id = models.AutoField(primary_key=True)
+    follower = models.ForeignKey('User', on_delete=models.CASCADE, related_name='following')
+    following = models.ForeignKey('User', on_delete=models.CASCADE, related_name='followers')
+    followed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('follower', 'following')
+        db_table = 'shared_follow'
+
 class OJTImport(models.Model):
     import_id = models.AutoField(primary_key=True)
     coordinator = models.CharField(max_length=100)  # Coordinator who imported

@@ -5,7 +5,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import User, AccountType, User, OJTImport, Notification
+from apps.shared.models import *
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -434,18 +434,26 @@ def notifications_view(request):
 def users_list_view(request):
     current_user_id = request.GET.get('current_user_id')
     try:
+        print(f"DEBUG: users_list_view called with current_user_id={current_user_id}")
         # Exclude admin users and the current logged-in user
-        users = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
+        users_qs = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
+        print(f"DEBUG: users_qs count after filter: {users_qs.count()}")
+        
+        # Randomize and limit to 10 users
+        users_qs = users_qs.order_by('?')[:10]
+        
         users_data = [
             {
                 'id': u.user_id,
                 'name': f"{u.f_name} {u.l_name}",
                 'profile_pic': u.profile_pic.url if u.profile_pic else None,
+                'batch': u.year_graduated,
             }
-            for u in users
+            for u in users_qs
         ]
         return JsonResponse({'success': True, 'users': users_data})
     except Exception as e:
+        print(f"ERROR in users_list_view: {str(e)}")
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 @csrf_exempt
@@ -905,7 +913,7 @@ def posts_view(request):
                 
                 # Decode the token
                 access_token = AccessToken(token)
-                user_id = access_token['user_id']
+                user_id = access_token['id']  # Changed from 'user_id' to 'id'
                 user = User.objects.get(user_id=user_id)
             except Exception as e:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -950,7 +958,7 @@ def post_like_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1019,7 +1027,7 @@ def post_comments_view(request, post_id):
             try:
                 from rest_framework_simplejwt.tokens import AccessToken
                 access_token = AccessToken(token)
-                user_id = access_token['user_id']
+                user_id = access_token['id']  # Changed from 'user_id' to 'id'
                 user = User.objects.get(user_id=user_id)
             except Exception as e:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1064,7 +1072,7 @@ def post_delete_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1129,7 +1137,7 @@ def post_repost_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1178,7 +1186,7 @@ def repost_delete_view(request, repost_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1191,5 +1199,198 @@ def repost_delete_view(request, repost_id):
         return JsonResponse({'success': True, 'message': 'Repost deleted'})
     except Repost.DoesNotExist:
         return JsonResponse({'error': 'Repost not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def alumni_followers_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        user = User.objects.get(user_id=user_id)
+        from apps.shared.models import Follow
+        followers = Follow.objects.filter(following=user).select_related('follower')
+        if not followers.exists():
+            return JsonResponse({
+                'success': True,
+                'followers': [],
+                'message': 'no followers',
+                'count': 0
+            })
+        followers_data = []
+        for follow_obj in followers:
+            follower = follow_obj.follower
+            followers_data.append({
+                'user_id': follower.user_id,
+                'ctu_id': follower.acc_username,
+                'name': f"{follower.f_name} {follower.l_name}",
+                'profile_pic': follower.profile_pic.url if follower.profile_pic else None,
+                'followed_at': follow_obj.followed_at.isoformat()
+            })
+        return JsonResponse({
+            'success': True,
+            'followers': followers_data,
+            'count': len(followers_data)
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def alumni_following_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        user = User.objects.get(user_id=user_id)
+        from apps.shared.models import Follow
+        following = Follow.objects.filter(follower=user).select_related('following')
+        if not following.exists():
+            return JsonResponse({
+                'success': True,
+                'following': [],
+                'message': 'no following',
+                'count': 0
+            })
+        following_data = []
+        for follow_obj in following:
+            followed_user = follow_obj.following
+            following_data.append({
+                'user_id': followed_user.user_id,
+                'ctu_id': followed_user.acc_username,
+                'name': f"{followed_user.f_name} {followed_user.l_name}",
+                'profile_pic': followed_user.profile_pic.url if followed_user.profile_pic else None,
+                'followed_at': follow_obj.followed_at.isoformat()
+            })
+        return JsonResponse({
+            'success': True,
+            'following': following_data,
+            'count': len(following_data)
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from apps.shared.models import Follow
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def follow_user_view(request, user_id):
+    try:
+        user_to_follow = User.objects.get(user_id=user_id)
+        current_user = request.user
+
+        if current_user.user_id == user_to_follow.user_id:
+            return Response({'error': 'Cannot follow yourself'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.method == 'POST':
+            follow_obj, created = Follow.objects.get_or_create(
+                follower=current_user,
+                following=user_to_follow
+            )
+            if created:
+                return Response({
+                    'success': True,
+                    'message': f'Successfully followed {user_to_follow.f_name} {user_to_follow.l_name}'
+                })
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'Already following this user'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        elif request.method == 'DELETE':
+            try:
+                follow_obj = Follow.objects.get(
+                    follower=current_user,
+                    following=user_to_follow
+                )
+                follow_obj.delete()
+                return Response({
+                    'success': True,
+                    'message': f'Successfully unfollowed {user_to_follow.f_name} {user_to_follow.l_name}'
+                })
+            except Follow.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': 'Not following this user'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except (InvalidToken, TokenError):
+        return Response({'error': 'Token is expired or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def check_follow_status_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        # Get the user to check
+        user_to_check = User.objects.get(user_id=user_id)
+        
+        # Get the current user from token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            # If no authentication, return not following
+            return JsonResponse({
+                'success': True,
+                'is_following': False
+            })
+        
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            current_user_id = access_token['id']  # Changed from 'user_id' to 'id'
+            current_user = User.objects.get(user_id=current_user_id)
+        except Exception as e:
+            # If token is invalid, return not following
+            return JsonResponse({
+                'success': True,
+                'is_following': False
+            })
+        
+        # Check if current user is following the target user
+        from apps.shared.models import Follow
+        is_following = Follow.objects.filter(
+            follower=current_user,
+            following=user_to_check
+        ).exists()
+        
+        return JsonResponse({
+            'success': True,
+            'is_following': is_following
+        })
+        
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
