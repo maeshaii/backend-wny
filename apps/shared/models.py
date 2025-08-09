@@ -112,7 +112,7 @@ class Post(models.Model):
     post_image = models.ImageField(upload_to='post_images/', null=True, blank=True)
     post_content = models.TextField()
     type = models.CharField(max_length=50, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    # created_at = models.DateTimeField(auto_now_add=True)  # Temporarily commented out for migration
 
 class Qpro(models.Model):
     qpro_id = models.AutoField(primary_key=True)
@@ -194,6 +194,7 @@ class User(models.Model):
     unemployment_reason = models.CharField(max_length=255, null=True, blank=True)
     pursue_further_study = models.CharField(max_length=10, null=True, blank=True)
     date_started = models.DateField(null=True, blank=True)
+    ojt_end_date = models.DateField(null=True, blank=True)
     school_name = models.CharField(max_length=255, null=True, blank=True)
     job_code = models.CharField(max_length=20, null=True, blank=True)
     ojtstatus = models.CharField(max_length=50, null=True, blank=True)
@@ -254,6 +255,16 @@ class User(models.Model):
     @property
     def is_authenticated(self):
         return True
+    
+    @property
+    def calculated_age(self):
+        """Calculate age based on birthdate"""
+        if self.birthdate:
+            from datetime import date
+            today = date.today()
+            age = today.year - self.birthdate.year - ((today.month, today.day) < (self.birthdate.month, self.birthdate.day))
+            return age
+        return None
 
 class QuestionCategory(models.Model):
     title = models.CharField(max_length=255)

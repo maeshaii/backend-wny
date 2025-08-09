@@ -543,6 +543,40 @@ def import_ojt_view(request):
                         print(f"Row {index+2} - FAILED to parse birthdate. Error: {e}")
                         birthdate = None
                 
+                # --- Calculate Age ---
+                age = None
+                if birthdate:
+                    from datetime import date
+                    today = date.today()
+                    age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+                    print(f"Row {index+2} - Calculated age: {age}")
+                
+                # --- Parse OJT Start/End Dates ---
+                ojt_start_date = None
+                ojt_end_date = None
+                
+                # Try different possible column names for start date
+                start_date_raw = row.get('Ojt_Start_Date') or row.get('Start_Date')
+                print(f"Row {index+2} - Raw Start Date: '{start_date_raw}', Type: {type(start_date_raw)}")
+                if pd.notna(start_date_raw):
+                    try:
+                        ojt_start_date = pd.to_datetime(start_date_raw, dayfirst=True).date()
+                        print(f"Row {index+2} - Parsed start date successfully: {ojt_start_date}")
+                    except Exception as e:
+                        print(f"Row {index+2} - FAILED to parse start date. Error: {e}")
+                        ojt_start_date = None
+                
+                # Try different possible column names for end date
+                end_date_raw = row.get('Ojt_End_Date') or row.get('End_Date')
+                print(f"Row {index+2} - Raw End Date: '{end_date_raw}', Type: {type(end_date_raw)}")
+                if pd.notna(end_date_raw):
+                    try:
+                        ojt_end_date = pd.to_datetime(end_date_raw, dayfirst=True).date()
+                        print(f"Row {index+2} - Parsed end date successfully: {ojt_end_date}")
+                    except Exception as e:
+                        print(f"Row {index+2} - FAILED to parse end date. Error: {e}")
+                        ojt_end_date = None
+
                 # --- Validation Check ---
                 required_data = {
                     "CTU_ID": ctu_id,
@@ -581,6 +615,7 @@ def import_ojt_view(request):
                     acc_username=ctu_id,
                     acc_password=birthdate,
                     birthdate=birthdate,
+                    age=age,
                     user_status='active',
                     f_name=first_name,
                     m_name=middle_name,
@@ -592,6 +627,8 @@ def import_ojt_view(request):
                     social_media=str(row.get('Social_Media', '')).strip() if pd.notna(row.get('Social_Media')) else '',
                     year_graduated=int(batch_year) if batch_year.isdigit() else None,
                     course=course,
+                    date_started=ojt_start_date,
+                    ojt_end_date=ojt_end_date,
                     account_type=AccountType.objects.get(ojt=True, admin=False, peso=False, user=False, coordinator=False),
                 )
                 
@@ -676,23 +713,14 @@ def ojt_by_year_view(request):
                 'last_name': ojt.l_name,
                 'gender': ojt.gender,
                 'birthdate': ojt.birthdate,
-                'age': ojt.age,  # Added age field
+                'age': ojt.calculated_age,  # Use calculated age property
                 'phone_number': ojt.phone_num,
                 'address': ojt.address,
                 'civil_status': ojt.civil_status,
                 'social_media': ojt.social_media,
                 'course': ojt.course,
-                'ojt_company': None, # No longer stored in User model
-                'ojt_position': None, # No longer stored in User model
-                'ojt_start_date': None, # No longer stored in User model
-                'ojt_end_date': None, # No longer stored in User model
-                'ojt_supervisor': None, # No longer stored in User model
-                'ojt_performance_rating': None, # No longer stored in User model
-                'ojt_certificate': None, # No longer stored in User model
-                'ojt_status': None, # No longer stored in User model
-                'ojt_remarks': None, # No longer stored in User model
-                'imported_by': ojt.acc_username,
-                'import_date': None, # No longer stored in User model
+                'ojt_start_date': ojt.date_started,  # Map to date_started field
+                'ojt_end_date': ojt.ojt_end_date,    # Map to ojt_end_date field
                 'batch_year': ojt.year_graduated,
             })
         
