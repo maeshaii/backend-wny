@@ -1392,16 +1392,45 @@ def alumni_following_view(request, user_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from apps.shared.models import Follow
 
-@api_view(['POST', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@csrf_exempt
+@require_http_methods(["POST", "DELETE", "OPTIONS"])
 def follow_user_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "POST, DELETE, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
     try:
+        # Authenticate via JWT manually to avoid issues with custom user
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            # Support both 'user_id' and legacy 'id' claims
+            current_user_id = access_token.get('user_id') or access_token.get('id')
+            if not current_user_id:
+                return JsonResponse({'error': 'Invalid token'}, status=401)
+            current_user = User.objects.get(user_id=current_user_id)
+        except Exception:
+            return JsonResponse({'error': 'Invalid token'}, status=401)
+
         user_to_follow = User.objects.get(user_id=user_id)
-        current_user = request.user
 
         if current_user.user_id == user_to_follow.user_id:
-            return Response({'error': 'Cannot follow yourself'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({'error': 'Cannot follow yourself'}, status=400)
 
         if request.method == 'POST':
             follow_obj, created = Follow.objects.get_or_create(
@@ -1409,15 +1438,15 @@ def follow_user_view(request, user_id):
                 following=user_to_follow
             )
             if created:
-                return Response({
+                return JsonResponse({
                     'success': True,
                     'message': f'Successfully followed {user_to_follow.f_name} {user_to_follow.l_name}'
                 })
             else:
-                return Response({
+                return JsonResponse({
                     'success': False,
                     'message': 'Already following this user'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                }, status=400)
 
         elif request.method == 'DELETE':
             try:
@@ -1426,22 +1455,20 @@ def follow_user_view(request, user_id):
                     following=user_to_follow
                 )
                 follow_obj.delete()
-                return Response({
+                return JsonResponse({
                     'success': True,
                     'message': f'Successfully unfollowed {user_to_follow.f_name} {user_to_follow.l_name}'
                 })
             except Follow.DoesNotExist:
-                return Response({
+                return JsonResponse({
                     'success': False,
                     'message': 'Not following this user'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                }, status=400)
 
     except User.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-    except (InvalidToken, TokenError):
-        return Response({'error': 'Token is expired or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        return JsonResponse({'error': 'User not found'}, status=404)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
 @require_http_methods(["GET", "OPTIONS"])
@@ -1470,7 +1497,7 @@ def check_follow_status_view(request, user_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            current_user_id = access_token['id']  # Changed from 'user_id' to 'id'
+            current_user_id = access_token.get('user_id') or access_token.get('id')
             current_user = User.objects.get(user_id=current_user_id)
         except Exception as e:
             # If token is invalid, return not following
