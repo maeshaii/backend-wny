@@ -301,53 +301,6 @@ def submit_tracker_response_view(request):
                     )
                     uploaded_files.append(file_upload)
         
-        # --- Set user_status from 'Are you PRESENTLY employed?' (ID 21 or text) ---
-        present_employed = answers.get('21') or answers.get(21)
-        if present_employed is None:
-            for k, v in answers.items():
-                if isinstance(k, str) and 'presently employed' in k.lower():
-                    present_employed = v
-                    break
-        if present_employed is not None:
-            val = str(present_employed).strip().lower()
-            if val == 'yes':
-                user.user_status = 'employed'
-            elif val == 'no':
-                user.user_status = 'unemployed'
-            user.save()
-
-        # --- Set pursue_further_study from 'Did you pursue futher study?' (ID 22 or text) ---
-        pursue_study = answers.get('22') or answers.get(22)
-        if pursue_study is None:
-            for k, v in answers.items():
-                if isinstance(k, str) and 'pursue' in k.lower() and 'study' in k.lower():
-                    pursue_study = v
-                    break
-        if pursue_study is not None:
-            val = str(pursue_study).strip().lower()
-            if val == 'yes':
-                user.pursue_further_study = 'yes'
-            elif val == 'no':
-                user.pursue_further_study = 'no'
-            user.save()
-
-        # --- Set position_current from 'Current Position' (ID 26 or text) ---
-        position_answer = answers.get('26') or answers.get(26)
-        if position_answer is None:
-            for k, v in answers.items():
-                if isinstance(k, str) and 'current position' in k.lower():
-                    position_answer = v
-                    break
-        if position_answer is not None:
-            user.position_current = str(position_answer).strip()
-            user.save()
-        
-        # --- Set job_code from tracker response (Job Code key) ---
-        job_code = answers.get('Job Code') or answers.get('job_code')
-        if job_code is not None:
-            user.job_code = str(job_code).strip()
-            user.save()
-
         # Create a thank you notification
         Notification.objects.create(
             user=user,
@@ -399,20 +352,10 @@ def update_tracker_accepting_responses_view(request, tracker_form_id):
 @csrf_exempt
 @require_http_methods(["GET"])
 def get_active_tracker_form(request):
-    form = TrackerForm.objects.order_by('-id').first()  # Fixed: use 'id' instead of 'tracker_form_id'
+    form = TrackerForm.objects.order_by('-tracker_form_id').first()  # or your own logic
     if form:
         return JsonResponse({'tracker_form_id': form.pk})
-    
-    # If no TrackerForm exists, create one automatically
-    try:
-        default_form = TrackerForm.objects.create(
-            title="CTU MAIN ALUMNI TRACKER",
-            description="Default tracker form for CTU alumni",
-            accepting_responses=True
-        )
-        return JsonResponse({'tracker_form_id': default_form.pk})
-    except Exception as e:
-        return JsonResponse({'tracker_form_id': None, 'error': str(e)}, status=500)
+    return JsonResponse({'tracker_form_id': None}, status=404)
 
 @csrf_exempt
 @require_http_methods(["GET"])

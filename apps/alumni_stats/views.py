@@ -127,13 +127,6 @@ def generate_statistics_view(request):
     elif stats_type == 'CHED':
         # CHED: Further study statistics based on real data fields
         pursuing_study = alumni_qs.filter(pursue_further_study__iexact='yes').count()  # pursue_further_study == 'yes'
-        # Aggregate job_alignment_count from Ched model
-        from apps.shared.models import Standard, Ched
-        ched_count = 0
-        # Get all Ched records and sum their job_alignment_count
-        ched_records = Ched.objects.all()
-        for ched in ched_records:
-            ched_count += getattr(ched, 'job_alignment_count', 0)
         return JsonResponse({
             'success': True,
             'type': 'CHED',
@@ -141,7 +134,6 @@ def generate_statistics_view(request):
             'pursuing_further_study': pursuing_study,
             'post_graduate_degree': alumni_qs.filter(program__icontains='graduate').count(),  # program contains 'graduate'
             'further_study_rate': round((pursuing_study / total_alumni * 100), 2) if total_alumni > 0 else 0,
-            'job_alignment_count': ched_count,
             'most_common_school': safe_mode(alumni_qs, 'school_name'),
             'most_common_program': safe_mode(alumni_qs, 'program'),
             'most_common_awards': safe_mode(alumni_qs, 'awards_recognition_current'),
