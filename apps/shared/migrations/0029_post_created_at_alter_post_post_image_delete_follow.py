@@ -3,26 +3,44 @@
 import django.utils.timezone
 from django.db import migrations, models
 
-
 class Migration(migrations.Migration):
-
     dependencies = [
         ('shared', '0028_create_default_tracker_form'),
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='post',
-            name='created_at',
-            field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
-            preserve_default=False,
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # Add the column only if it doesn't exist (avoids duplicate column error)
+                migrations.RunSQL(
+                    """
+                    ALTER TABLE shared_post
+                    ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT NOW() NOT NULL;
+                    """,
+                    reverse_sql="""
+                    -- No reverse; we don't want to drop data
+                    """
+                ),
+                # Guarded drop instead of a state DeleteModel (avoids KeyError if model/state missing)
+                migrations.RunSQL(
+                    "DROP TABLE IF EXISTS shared_follow CASCADE;",
+                    reverse_sql=""  # no-op
+                ),
+            ],
+            state_operations=[
+                # Align Django's state with the model: created_at exists
+                migrations.AddField(
+                    model_name='post',
+                    name='created_at',
+                    field=models.DateTimeField(auto_now_add=True),
+                ),
+                # Do NOT include migrations.DeleteModel('Follow') here
+            ],
         ),
+        # Keep the AlterField from your original migration
         migrations.AlterField(
             model_name='post',
             name='post_image',
             field=models.ImageField(blank=True, null=True, upload_to='post_images/'),
-        ),
-        migrations.DeleteModel(
-            name='Follow',
         ),
     ]
