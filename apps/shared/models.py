@@ -285,6 +285,17 @@ class User(models.Model):
     def is_authenticated(self):
         return True
 
+    @property
+    def is_active(self):
+        """
+        Provide an is_active attribute expected by Django/DRF auth backends.
+        Treat users as active by default unless explicitly marked otherwise via user_status.
+        """
+        try:
+            return (self.user_status or "").lower() != "inactive"
+        except Exception:
+            return True
+
     def update_job_alignment(self):
         """
         Update job alignment fields based on position_current and course
