@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
 from apps.shared.models import *
+from apps.shared.models import User, AccountType, User, OJTImport, Notification, Post, PostCategory, Like, Comment, Repost
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -27,6 +28,13 @@ from rest_framework import status
 from django.db.models import Value, CharField
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.decorators import api_view
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from apps.shared.models import Follow
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -833,6 +841,9 @@ def search_alumni(request):
     return Response(data)
 
 
+
+# mobile side
+
 @csrf_exempt
 @require_http_methods(["GET", "POST", "OPTIONS"])
 def posts_view(request):
@@ -884,11 +895,11 @@ def posts_view(request):
                         'profile_pic': post.user.profile_pic.url if post.user.profile_pic else None,
                     },
                     'category': {
-                        'post_cat_id': post.post_cat.post_cat_id,
-                        'events': post.post_cat.events,
-                        'announcements': post.post_cat.announcements,
-                        'donation': post.post_cat.donation,
-                        'personal': post.post_cat.personal,
+                        'post_cat_id': post.post_cat.post_cat_id if post.post_cat else None,
+                        'events': post.post_cat.events if post.post_cat else False,
+                        'announcements': post.post_cat.announcements if post.post_cat else False,
+                        'donation': post.post_cat.donation if post.post_cat else False,
+                        'personal': post.post_cat.personal if post.post_cat else False,
                     }
                 })
             
@@ -899,6 +910,7 @@ def posts_view(request):
     elif request.method == "POST":
         try:
             data = json.loads(request.body)
+            print(f"DEBUG: Received post data: {data}")
             
             # Get user from token
             auth_header = request.headers.get('Authorization')
@@ -915,18 +927,82 @@ def posts_view(request):
                 access_token = AccessToken(token)
                 user_id = access_token['id']  # Changed from 'user_id' to 'id'
                 user = User.objects.get(user_id=user_id)
+                print(f"DEBUG: Found user: {user.user_id}")
             except Exception as e:
+                print(f"DEBUG: Token error: {e}")
                 return JsonResponse({'error': 'Invalid token'}, status=401)
             
+            # Validate post category exists
+            post_cat_id = data.get('post_cat_id')
+            try:
+                post_category = PostCategory.objects.get(post_cat_id=post_cat_id)
+                print(f"DEBUG: Found category: {post_category.post_cat_id}")
+            except PostCategory.DoesNotExist:
+                print(f"DEBUG: Category {post_cat_id} not found")
+                return JsonResponse({'error': 'Invalid post category'}, status=400)
+            
             # Create the post
-            post = Post.objects.create(
-                user=user,
-                post_cat_id=data.get('post_cat_id'),
-                post_title=data.get('post_title', ''),
-                post_content=data.get('post_content', ''),
-                post_image=data.get('post_image', ''),
-                type=data.get('type', 'personal')
-            )
+            post_image = data.get('post_image', '')
+            post = None  # Initialize post variable
+            
+            if post_image == '' or post_image.startswith('file://'):
+                post_image = None  # Convert empty string or local file path to None for ImageField
+                post = Post.objects.create(
+                    user=user,
+                    post_cat=post_category,
+                    post_title=data.get('post_title', ''),
+                    post_content=data.get('post_content', ''),
+                    post_image=post_image,
+                    type=data.get('type', 'personal')
+                )
+            elif post_image.startswith('data:image/'):
+                # Handle base64 image data
+                import base64
+                from django.core.files.base import ContentFile
+                from django.core.files.uploadedfile import InMemoryUploadedFile
+                import io
+                
+                try:
+                    # Extract base64 data
+                    format, imgstr = post_image.split(';base64,')
+                    ext = format.split('/')[-1]
+                    
+                    # Create file name
+                    import uuid
+                    filename = f"post_image_{uuid.uuid4()}.{ext}"
+                    
+                    # Convert base64 to file
+                    image_data = base64.b64decode(imgstr)
+                    image_file = ContentFile(image_data, name=filename)
+                    
+                    post = Post.objects.create(
+                        user=user,
+                        post_cat=post_category,
+                        post_title=data.get('post_title', ''),
+                        post_content=data.get('post_content', ''),
+                        post_image=image_file,
+                        type=data.get('type', 'personal')
+                    )
+                except Exception as e:
+                    print(f"DEBUG: Error handling base64 image: {e}")
+                    post = Post.objects.create(
+                        user=user,
+                        post_cat=post_category,
+                        post_title=data.get('post_title', ''),
+                        post_content=data.get('post_content', ''),
+                        post_image=None,
+                        type=data.get('type', 'personal')
+                    )
+            else:
+                post = Post.objects.create(
+                    user=user,
+                    post_cat=post_category,
+                    post_title=data.get('post_title', ''),
+                    post_content=data.get('post_content', ''),
+                    post_image=post_image,
+                    type=data.get('type', 'personal')
+                )
+            print(f"DEBUG: Created post: {post.post_id}")
             
             return JsonResponse({
                 'success': True,
@@ -934,6 +1010,9 @@ def posts_view(request):
                 'message': 'Post created successfully'
             })
         except Exception as e:
+            import traceback
+            print(f"DEBUG: Error creating post: {str(e)}")
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
             return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
@@ -967,6 +1046,15 @@ def post_like_view(request, post_id):
             # Like the post
             like, created = Like.objects.get_or_create(user=user, post=post)
             if created:
+                # Create notification for post owner (only if the liker is not the post owner)
+                if user.user_id != post.user.user_id:
+                    Notification.objects.create(
+                        user=post.user,
+                        notif_type='like',
+                        subject='Post Liked',
+                        notifi_content=f"{user.f_name} {user.l_name} liked your post",
+                        notif_date=timezone.now()
+                    )
                 return JsonResponse({'success': True, 'message': 'Post liked'})
             else:
                 return JsonResponse({'success': False, 'message': 'Post already liked'})
@@ -1039,6 +1127,16 @@ def post_comments_view(request, post_id):
                 comment_content=data.get('comment_content', ''),
                 date_created=timezone.now()
             )
+            
+            # Create notification for post owner 
+            if user.user_id != post.user.user_id:
+                Notification.objects.create(
+                    user=post.user,
+                    notif_type='comment',
+                    subject='Post Commented',
+                    notifi_content=f"{user.f_name} {user.l_name} commented on your post",
+                    notif_date=timezone.now()
+                )
             
             return JsonResponse({
                 'success': True, 
@@ -1153,6 +1251,16 @@ def post_repost_view(request, post_id):
             post=post,
             repost_date=timezone.now()
         )
+        
+        # Create notification for post owner (only if the reposter is not the post owner)
+        if user.user_id != post.user.user_id:
+            Notification.objects.create(
+                user=post.user,
+                notif_type='repost',
+                subject='Post Reposted',
+                notifi_content=f"{user.f_name} {user.l_name} reposted your post",
+                notif_date=timezone.now()
+            )
         
         return JsonResponse({
             'success': True,
@@ -1284,13 +1392,6 @@ def alumni_following_view(request, user_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from apps.shared.models import Follow
 
 @api_view(['POST', 'DELETE'])
 @permission_classes([IsAuthenticated])

@@ -266,6 +266,11 @@ class User(models.Model):
     USERNAME_FIELD = 'acc_username'
     REQUIRED_FIELDS = []
     
+    # Add is_active property for JWT compatibility
+    @property
+    def is_active(self):
+        return True
+    
     class Meta:
         indexes = [
             models.Index(fields=['user_status', 'year_graduated']),
