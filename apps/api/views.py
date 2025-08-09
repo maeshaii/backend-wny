@@ -5,7 +5,8 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import User, AccountType, User, OJTImport, Notification
+from apps.shared.models import *
+from apps.shared.models import User, AccountType, User, OJTImport, Notification, Post, PostCategory, Like, Comment, Repost
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -27,6 +28,13 @@ from rest_framework import status
 from django.db.models import Value, CharField
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.decorators import api_view
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from apps.shared.models import Follow
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -434,18 +442,26 @@ def notifications_view(request):
 def users_list_view(request):
     current_user_id = request.GET.get('current_user_id')
     try:
+        print(f"DEBUG: users_list_view called with current_user_id={current_user_id}")
         # Exclude admin users and the current logged-in user
-        users = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
+        users_qs = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
+        print(f"DEBUG: users_qs count after filter: {users_qs.count()}")
+        
+        # Randomize and limit to 10 users
+        users_qs = users_qs.order_by('?')[:10]
+        
         users_data = [
             {
                 'id': u.user_id,
                 'name': f"{u.f_name} {u.l_name}",
                 'profile_pic': u.profile_pic.url if u.profile_pic else None,
+                'batch': u.year_graduated,
             }
-            for u in users
+            for u in users_qs
         ]
         return JsonResponse({'success': True, 'users': users_data})
     except Exception as e:
+        print(f"ERROR in users_list_view: {str(e)}")
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 @csrf_exempt
@@ -853,6 +869,9 @@ def search_alumni(request):
     return Response(data)
 
 
+
+# mobile side
+
 @csrf_exempt
 @require_http_methods(["GET", "POST", "OPTIONS"])
 def posts_view(request):
@@ -904,11 +923,11 @@ def posts_view(request):
                         'profile_pic': post.user.profile_pic.url if post.user.profile_pic else None,
                     },
                     'category': {
-                        'post_cat_id': post.post_cat.post_cat_id,
-                        'events': post.post_cat.events,
-                        'announcements': post.post_cat.announcements,
-                        'donation': post.post_cat.donation,
-                        'personal': post.post_cat.personal,
+                        'post_cat_id': post.post_cat.post_cat_id if post.post_cat else None,
+                        'events': post.post_cat.events if post.post_cat else False,
+                        'announcements': post.post_cat.announcements if post.post_cat else False,
+                        'donation': post.post_cat.donation if post.post_cat else False,
+                        'personal': post.post_cat.personal if post.post_cat else False,
                     }
                 })
             
@@ -919,6 +938,7 @@ def posts_view(request):
     elif request.method == "POST":
         try:
             data = json.loads(request.body)
+            print(f"DEBUG: Received post data: {data}")
             
             # Get user from token
             auth_header = request.headers.get('Authorization')
@@ -933,20 +953,84 @@ def posts_view(request):
                 
                 # Decode the token
                 access_token = AccessToken(token)
-                user_id = access_token['user_id']
+                user_id = access_token['id']  # Changed from 'user_id' to 'id'
                 user = User.objects.get(user_id=user_id)
+                print(f"DEBUG: Found user: {user.user_id}")
             except Exception as e:
+                print(f"DEBUG: Token error: {e}")
                 return JsonResponse({'error': 'Invalid token'}, status=401)
             
+            # Validate post category exists
+            post_cat_id = data.get('post_cat_id')
+            try:
+                post_category = PostCategory.objects.get(post_cat_id=post_cat_id)
+                print(f"DEBUG: Found category: {post_category.post_cat_id}")
+            except PostCategory.DoesNotExist:
+                print(f"DEBUG: Category {post_cat_id} not found")
+                return JsonResponse({'error': 'Invalid post category'}, status=400)
+            
             # Create the post
-            post = Post.objects.create(
-                user=user,
-                post_cat_id=data.get('post_cat_id'),
-                post_title=data.get('post_title', ''),
-                post_content=data.get('post_content', ''),
-                post_image=data.get('post_image', ''),
-                type=data.get('type', 'personal')
-            )
+            post_image = data.get('post_image', '')
+            post = None  # Initialize post variable
+            
+            if post_image == '' or post_image.startswith('file://'):
+                post_image = None  # Convert empty string or local file path to None for ImageField
+                post = Post.objects.create(
+                    user=user,
+                    post_cat=post_category,
+                    post_title=data.get('post_title', ''),
+                    post_content=data.get('post_content', ''),
+                    post_image=post_image,
+                    type=data.get('type', 'personal')
+                )
+            elif post_image.startswith('data:image/'):
+                # Handle base64 image data
+                import base64
+                from django.core.files.base import ContentFile
+                from django.core.files.uploadedfile import InMemoryUploadedFile
+                import io
+                
+                try:
+                    # Extract base64 data
+                    format, imgstr = post_image.split(';base64,')
+                    ext = format.split('/')[-1]
+                    
+                    # Create file name
+                    import uuid
+                    filename = f"post_image_{uuid.uuid4()}.{ext}"
+                    
+                    # Convert base64 to file
+                    image_data = base64.b64decode(imgstr)
+                    image_file = ContentFile(image_data, name=filename)
+                    
+                    post = Post.objects.create(
+                        user=user,
+                        post_cat=post_category,
+                        post_title=data.get('post_title', ''),
+                        post_content=data.get('post_content', ''),
+                        post_image=image_file,
+                        type=data.get('type', 'personal')
+                    )
+                except Exception as e:
+                    print(f"DEBUG: Error handling base64 image: {e}")
+                    post = Post.objects.create(
+                        user=user,
+                        post_cat=post_category,
+                        post_title=data.get('post_title', ''),
+                        post_content=data.get('post_content', ''),
+                        post_image=None,
+                        type=data.get('type', 'personal')
+                    )
+            else:
+                post = Post.objects.create(
+                    user=user,
+                    post_cat=post_category,
+                    post_title=data.get('post_title', ''),
+                    post_content=data.get('post_content', ''),
+                    post_image=post_image,
+                    type=data.get('type', 'personal')
+                )
+            print(f"DEBUG: Created post: {post.post_id}")
             
             return JsonResponse({
                 'success': True,
@@ -954,6 +1038,9 @@ def posts_view(request):
                 'message': 'Post created successfully'
             })
         except Exception as e:
+            import traceback
+            print(f"DEBUG: Error creating post: {str(e)}")
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
             return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
@@ -978,7 +1065,7 @@ def post_like_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -987,6 +1074,15 @@ def post_like_view(request, post_id):
             # Like the post
             like, created = Like.objects.get_or_create(user=user, post=post)
             if created:
+                # Create notification for post owner (only if the liker is not the post owner)
+                if user.user_id != post.user.user_id:
+                    Notification.objects.create(
+                        user=post.user,
+                        notif_type='like',
+                        subject='Post Liked',
+                        notifi_content=f"{user.f_name} {user.l_name} liked your post",
+                        notif_date=timezone.now()
+                    )
                 return JsonResponse({'success': True, 'message': 'Post liked'})
             else:
                 return JsonResponse({'success': False, 'message': 'Post already liked'})
@@ -1047,7 +1143,7 @@ def post_comments_view(request, post_id):
             try:
                 from rest_framework_simplejwt.tokens import AccessToken
                 access_token = AccessToken(token)
-                user_id = access_token['user_id']
+                user_id = access_token['id']  # Changed from 'user_id' to 'id'
                 user = User.objects.get(user_id=user_id)
             except Exception as e:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1059,6 +1155,16 @@ def post_comments_view(request, post_id):
                 comment_content=data.get('comment_content', ''),
                 date_created=timezone.now()
             )
+            
+            # Create notification for post owner 
+            if user.user_id != post.user.user_id:
+                Notification.objects.create(
+                    user=post.user,
+                    notif_type='comment',
+                    subject='Post Commented',
+                    notifi_content=f"{user.f_name} {user.l_name} commented on your post",
+                    notif_date=timezone.now()
+                )
             
             return JsonResponse({
                 'success': True, 
@@ -1092,7 +1198,7 @@ def post_delete_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1157,7 +1263,7 @@ def post_repost_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1173,6 +1279,16 @@ def post_repost_view(request, post_id):
             post=post,
             repost_date=timezone.now()
         )
+        
+        # Create notification for post owner (only if the reposter is not the post owner)
+        if user.user_id != post.user.user_id:
+            Notification.objects.create(
+                user=post.user,
+                notif_type='repost',
+                subject='Post Reposted',
+                notifi_content=f"{user.f_name} {user.l_name} reposted your post",
+                notif_date=timezone.now()
+            )
         
         return JsonResponse({
             'success': True,
@@ -1206,7 +1322,7 @@ def repost_delete_view(request, repost_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['user_id']
+            user_id = access_token['id']  # Changed from 'user_id' to 'id'
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1219,5 +1335,218 @@ def repost_delete_view(request, repost_id):
         return JsonResponse({'success': True, 'message': 'Repost deleted'})
     except Repost.DoesNotExist:
         return JsonResponse({'error': 'Repost not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def alumni_followers_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        user = User.objects.get(user_id=user_id)
+        from apps.shared.models import Follow
+        followers = Follow.objects.filter(following=user).select_related('follower')
+        if not followers.exists():
+            return JsonResponse({
+                'success': True,
+                'followers': [],
+                'message': 'no followers',
+                'count': 0
+            })
+        followers_data = []
+        for follow_obj in followers:
+            follower = follow_obj.follower
+            followers_data.append({
+                'user_id': follower.user_id,
+                'ctu_id': follower.acc_username,
+                'name': f"{follower.f_name} {follower.l_name}",
+                'profile_pic': follower.profile_pic.url if follower.profile_pic else None,
+                'followed_at': follow_obj.followed_at.isoformat()
+            })
+        return JsonResponse({
+            'success': True,
+            'followers': followers_data,
+            'count': len(followers_data)
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def alumni_following_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        user = User.objects.get(user_id=user_id)
+        from apps.shared.models import Follow
+        following = Follow.objects.filter(follower=user).select_related('following')
+        if not following.exists():
+            return JsonResponse({
+                'success': True,
+                'following': [],
+                'message': 'no following',
+                'count': 0
+            })
+        following_data = []
+        for follow_obj in following:
+            followed_user = follow_obj.following
+            following_data.append({
+                'user_id': followed_user.user_id,
+                'ctu_id': followed_user.acc_username,
+                'name': f"{followed_user.f_name} {followed_user.l_name}",
+                'profile_pic': followed_user.profile_pic.url if followed_user.profile_pic else None,
+                'followed_at': follow_obj.followed_at.isoformat()
+            })
+        return JsonResponse({
+            'success': True,
+            'following': following_data,
+            'count': len(following_data)
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from apps.shared.models import Follow
+
+@csrf_exempt
+@require_http_methods(["POST", "DELETE", "OPTIONS"])
+def follow_user_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "POST, DELETE, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        # Authenticate via JWT manually to avoid issues with custom user
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            # Support both 'user_id' and legacy 'id' claims
+            current_user_id = access_token.get('user_id') or access_token.get('id')
+            if not current_user_id:
+                return JsonResponse({'error': 'Invalid token'}, status=401)
+            current_user = User.objects.get(user_id=current_user_id)
+        except Exception:
+            return JsonResponse({'error': 'Invalid token'}, status=401)
+
+        user_to_follow = User.objects.get(user_id=user_id)
+
+        if current_user.user_id == user_to_follow.user_id:
+            return JsonResponse({'error': 'Cannot follow yourself'}, status=400)
+
+        if request.method == 'POST':
+            follow_obj, created = Follow.objects.get_or_create(
+                follower=current_user,
+                following=user_to_follow
+            )
+            if created:
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Successfully followed {user_to_follow.f_name} {user_to_follow.l_name}'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Already following this user'
+                }, status=400)
+
+        elif request.method == 'DELETE':
+            try:
+                follow_obj = Follow.objects.get(
+                    follower=current_user,
+                    following=user_to_follow
+                )
+                follow_obj.delete()
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Successfully unfollowed {user_to_follow.f_name} {user_to_follow.l_name}'
+                })
+            except Follow.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Not following this user'
+                }, status=400)
+
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def check_follow_status_view(request, user_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        # Get the user to check
+        user_to_check = User.objects.get(user_id=user_id)
+        
+        # Get the current user from token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            # If no authentication, return not following
+            return JsonResponse({
+                'success': True,
+                'is_following': False
+            })
+        
+        token = auth_header.split(' ')[1]
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            access_token = AccessToken(token)
+            current_user_id = access_token.get('user_id') or access_token.get('id')
+            current_user = User.objects.get(user_id=current_user_id)
+        except Exception as e:
+            # If token is invalid, return not following
+            return JsonResponse({
+                'success': True,
+                'is_following': False
+            })
+        
+        # Check if current user is following the target user
+        from apps.shared.models import Follow
+        is_following = Follow.objects.filter(
+            follower=current_user,
+            following=user_to_check
+        ).exists()
+        
+        return JsonResponse({
+            'success': True,
+            'is_following': is_following
+        })
+        
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

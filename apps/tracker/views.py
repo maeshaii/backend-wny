@@ -348,6 +348,27 @@ def submit_tracker_response_view(request):
             user.job_code = str(job_code).strip()
             user.save()
 
+        # --- Update job alignment based on position_current ---
+        user.update_job_alignment()
+        user.save()
+
+        # --- Update statistics-related fields from tracker answers ---
+        # CHED Statistics: Self-employed status from tracker answer Q23
+        employment_type = answers.get('23') or answers.get(23)  # Q23: Employment type
+        if employment_type:
+            employment_type_lower = str(employment_type).lower()
+            if 'self' in employment_type_lower or 'freelance' in employment_type_lower:
+                user.self_employed = True
+            else:
+                user.self_employed = False
+            user.save()
+        
+        # Note: High position and absorbed status are now handled in update_job_alignment()
+        # Job alignment is also handled in update_job_alignment()
+        
+        # Save all updates
+        user.save()
+
         # Create a thank you notification
         Notification.objects.create(
             user=user,

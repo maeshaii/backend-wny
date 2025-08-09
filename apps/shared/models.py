@@ -29,9 +29,9 @@ class Comment(models.Model):
 
 class CompTechJob(models.Model):
     comp_tech_jobs_id = models.AutoField(primary_key=True)
-    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='comptechjob_sucs')
-    info_system_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='comptechjob_infosystemjobs')
-    info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='comptechjob_infotechjobs')
+    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='comptechjob_sucs', null=True, blank=True)
+    info_system_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='comptechjob_infosystemjobs', null=True, blank=True)
+    info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='comptechjob_infotechjobs', null=True, blank=True)
     job_title = models.CharField(max_length=255)
 
 class ExportedFile(models.Model):
@@ -65,17 +65,39 @@ class Import(models.Model):
 
 class InfoTechJob(models.Model):
     info_tech_jobs_id = models.AutoField(primary_key=True)
-    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='infotechjob_sucs')
-    info_systems_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='infotechjob_infosystemjobs')
-    comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='infotechjob_comptechjobs')
+    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='infotechjob_sucs', null=True, blank=True)
+    info_systems_jobs = models.ForeignKey('InfoSystemJob', on_delete=models.CASCADE, related_name='infotechjob_infosystemjobs', null=True, blank=True)
+    comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='infotechjob_comptechjobs', null=True, blank=True)
     job_title = models.CharField(max_length=255)
 
 class InfoSystemJob(models.Model):
     info_system_jobs_id = models.AutoField(primary_key=True)
-    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='infosystemjob_sucs')
-    info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='infosystemjob_infotechjobs')
-    comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='infosystemjob_comptechjobs')
+    suc = models.ForeignKey('Suc', on_delete=models.CASCADE, related_name='infosystemjob_sucs', null=True, blank=True)
+    info_tech_jobs = models.ForeignKey('InfoTechJob', on_delete=models.CASCADE, related_name='infosystemjob_infotechjobs', null=True, blank=True)
+    comp_tech_jobs = models.ForeignKey('CompTechJob', on_delete=models.CASCADE, related_name='infosystemjob_comptechjobs', null=True, blank=True)
     job_title = models.CharField(max_length=255)
+
+# NEW: Simple job models for job alignment (no complex relationships)
+class SimpleCompTechJob(models.Model):
+    id = models.AutoField(primary_key=True)
+    job_title = models.CharField(max_length=255, unique=True)
+    
+    def __str__(self):
+        return self.job_title
+
+class SimpleInfoTechJob(models.Model):
+    id = models.AutoField(primary_key=True)
+    job_title = models.CharField(max_length=255, unique=True)
+    
+    def __str__(self):
+        return self.job_title
+
+class SimpleInfoSystemJob(models.Model):
+    id = models.AutoField(primary_key=True)
+    job_title = models.CharField(max_length=255, unique=True)
+    
+    def __str__(self):
+        return self.job_title
 
 class Like(models.Model):
     like_id = models.AutoField(primary_key=True)
@@ -199,6 +221,14 @@ class User(models.Model):
     job_code = models.CharField(max_length=20, null=True, blank=True)
     ojtstatus = models.CharField(max_length=50, null=True, blank=True)
     
+    # Job Alignment Fields for Statistics (Connected to position_current)
+    job_alignment_status = models.CharField(max_length=50, null=True, blank=True, default='not_aligned')  # 'aligned', 'not_aligned'
+    job_alignment_category = models.CharField(max_length=100, null=True, blank=True)  # 'comp_tech', 'info_tech', 'info_system'
+    job_alignment_title = models.CharField(max_length=255, null=True, blank=True)  # Matched job title
+    self_employed = models.BooleanField(default=False)  # Self-employed status (separate from job alignment)
+    high_position = models.BooleanField(default=False)  # High position status for AACUP
+    absorbed = models.BooleanField(default=False)  # Absorbed status for AACUP
+    
     # NEW: Direct tracker question fields (replacing TrackerResponse JSON)
     # Note: Basic info (name, age, birthdate, phone, address, civil_status, social_media) 
     # already exists in User model from import, so we only add employment/study fields
@@ -237,6 +267,11 @@ class User(models.Model):
     USERNAME_FIELD = 'acc_username'
     REQUIRED_FIELDS = []
     
+    # Add is_active property for JWT compatibility
+    @property
+    def is_active(self):
+        return True
+    
     class Meta:
         indexes = [
             models.Index(fields=['user_status', 'year_graduated']),
@@ -265,6 +300,126 @@ class User(models.Model):
             age = today.year - self.birthdate.year - ((today.month, today.day) < (self.birthdate.month, self.birthdate.day))
             return age
         return None
+
+    @property
+    def is_active(self):
+        """
+        Provide an is_active attribute expected by Django/DRF auth backends.
+        Treat users as active by default unless explicitly marked otherwise via user_status.
+        """
+        try:
+            return (self.user_status or "").lower() != "inactive"
+        except Exception:
+            return True
+
+    def update_job_alignment(self):
+        """
+        Update job alignment fields based on position_current and course
+        This connects tracker answers to statistics types (CHED, SUC, AACUP)
+        """
+        if not self.position_current:
+            self.job_alignment_status = 'not_aligned'
+            self.job_alignment_category = None
+            self.job_alignment_title = None
+            return
+        
+        position_lower = self.position_current.lower().strip()
+        course_lower = (self.course or '').lower()
+        
+        # STEP 1: Self-employed status based on tracker answer Q23 (q_employment_type)
+        # Check if user is self-employed based on tracker response
+        if self.q_employment_type and 'self-employed' in self.q_employment_type.lower():
+            self.self_employed = True
+        else:
+            self.self_employed = False
+        
+        # STEP 2: Check for high position status (for AACUP statistics)
+        # More specific keywords and context-aware detection
+        high_position_keywords = [
+            'chief', 'director', 'president', 'vice president', 'ceo', 'cto', 'cfo', 'vp',
+            'senior manager', 'senior director', 'executive', 'head of', 'lead'
+        ]
+        
+        # Check for high position keywords
+        is_high_position = any(keyword in position_lower for keyword in high_position_keywords)
+        
+        # Additional checks for management positions
+        if 'manager' in position_lower:
+            # Only consider "manager" as high position if it's not "assistant manager" or similar
+            if not any(exclude in position_lower for exclude in ['assistant', 'junior', 'trainee', 'intern']):
+                is_high_position = True
+        
+        self.high_position = is_high_position
+        
+        # STEP 3: Check for absorbed status (for AACUP) - typically first job after graduation
+        if self.date_started and self.year_graduated:
+            # If hired within 6 months of graduation, consider absorbed
+            from datetime import date
+            graduation_date = date(self.year_graduated, 6, 30)  # Assume June graduation
+            if self.date_started <= graduation_date:
+                self.absorbed = True
+            else:
+                self.absorbed = False
+        
+        # STEP 4: Job alignment logic using simple job models
+        # This determines if the job aligns with the course, regardless of employment type
+        job_aligned = False
+        
+        # Import simple job models
+        from django.db import connection
+        
+        # Check based on course type using simple job models
+        if 'bit-ct' in course_lower or 'computer technology' in course_lower:
+            # Computer Technology jobs
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT job_title FROM shared_simplecomptechjob WHERE LOWER(job_title) LIKE %s",
+                    [f'%{position_lower}%']
+                )
+                result = cursor.fetchone()
+                if result:
+                    self.job_alignment_status = 'aligned'
+                    self.job_alignment_category = 'comp_tech'
+                    self.job_alignment_title = result[0]
+                    job_aligned = True
+        
+        elif 'bsit' in course_lower or 'information technology' in course_lower:
+            # Information Technology jobs
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT job_title FROM shared_simpleinfotechjob WHERE LOWER(job_title) LIKE %s",
+                    [f'%{position_lower}%']
+                )
+                result = cursor.fetchone()
+                if result:
+                    self.job_alignment_status = 'aligned'
+                    self.job_alignment_category = 'info_tech'
+                    self.job_alignment_title = result[0]
+                    job_aligned = True
+        
+        elif 'bsis' in course_lower or 'information system' in course_lower:
+            # Information System jobs
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT job_title FROM shared_simpleinfosystemjob WHERE LOWER(job_title) LIKE %s",
+                    [f'%{position_lower}%']
+                )
+                result = cursor.fetchone()
+                if result:
+                    self.job_alignment_status = 'aligned'
+                    self.job_alignment_category = 'info_system'
+                    self.job_alignment_title = result[0]
+                    job_aligned = True
+        
+        # REMOVED: Fallback logic that allowed cross-course alignment
+        # This was causing BSIT graduates to be marked as aligned for BSIS-exclusive jobs
+        # Job alignment should only be based on the graduate's specific course
+        
+        # If still not aligned
+        if not job_aligned:
+            self.job_alignment_status = 'not_aligned'
+            self.job_alignment_category = None
+            self.job_alignment_title = None
 
 class QuestionCategory(models.Model):
     title = models.CharField(max_length=255)
@@ -393,6 +548,16 @@ class TrackerResponse(models.Model):
         user.save()
 
 # OJT-specific models
+class Follow(models.Model):
+    follow_id = models.AutoField(primary_key=True)
+    follower = models.ForeignKey('User', on_delete=models.CASCADE, related_name='following')
+    following = models.ForeignKey('User', on_delete=models.CASCADE, related_name='followers')
+    followed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('follower', 'following')
+        db_table = 'shared_follow'
+
 class OJTImport(models.Model):
     import_id = models.AutoField(primary_key=True)
     coordinator = models.CharField(max_length=100)  # Coordinator who imported

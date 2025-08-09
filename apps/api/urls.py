@@ -26,6 +26,8 @@ urlpatterns = [
     path('ojt/import/', import_ojt_view, name='import_ojt'),
     path('ojt/statistics/', ojt_statistics_view, name='ojt_statistics'),
     path('ojt/by-year/', ojt_by_year_view, name='ojt_by_year'),
+
+    path('users_list_view/', views.users_list_view, name='users_list_view'),
     
     path('tracker/questions/', tracker_questions_view, name='tracker_questions'),
     path('tracker/responses/', submit_tracker_response_view, name='submit_tracker_response'),  # POST for submission
@@ -45,6 +47,10 @@ urlpatterns = [
     path('notifications/', notifications_view, name='notifications'),
     path('notifications/delete/', delete_notifications_view, name='delete_notifications'),
     path('alumni/<int:user_id>/', alumni_detail_view, name='alumni_detail'),
+    path('alumni/<int:user_id>/followers/', views.alumni_followers_view, name='alumni_followers'),
+    path('alumni/<int:user_id>/following/', views.alumni_following_view, name='alumni_following'),
+    path('follow/<int:user_id>/', views.follow_user_view, name='follow_user'),
+    path('follow/<int:user_id>/status/', views.check_follow_status_view, name='check_follow_status'),
     path('tracker/accepting/<int:tracker_form_id>/', tracker_accepting_responses_view, name='tracker_accepting_responses'),
     path('tracker/update-accepting/<int:tracker_form_id>/', update_tracker_accepting_responses_view, name='update_tracker_accepting_responses'),
     path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
