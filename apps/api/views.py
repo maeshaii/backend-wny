@@ -5,7 +5,6 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import *
 from apps.shared.models import User, AccountType, User, OJTImport, Notification, Post, PostCategory, Like, Comment, Repost
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -28,13 +27,6 @@ from rest_framework import status
 from django.db.models import Value, CharField
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.decorators import api_view
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from apps.shared.models import Follow
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -442,26 +434,18 @@ def notifications_view(request):
 def users_list_view(request):
     current_user_id = request.GET.get('current_user_id')
     try:
-        print(f"DEBUG: users_list_view called with current_user_id={current_user_id}")
         # Exclude admin users and the current logged-in user
-        users_qs = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
-        print(f"DEBUG: users_qs count after filter: {users_qs.count()}")
-        
-        # Randomize and limit to 10 users
-        users_qs = users_qs.order_by('?')[:10]
-        
+        users = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
         users_data = [
             {
                 'id': u.user_id,
                 'name': f"{u.f_name} {u.l_name}",
                 'profile_pic': u.profile_pic.url if u.profile_pic else None,
-                'batch': u.year_graduated,
             }
-            for u in users_qs
+            for u in users
         ]
         return JsonResponse({'success': True, 'users': users_data})
     except Exception as e:
-        print(f"ERROR in users_list_view: {str(e)}")
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 @csrf_exempt
@@ -953,7 +937,7 @@ def posts_view(request):
                 
                 # Decode the token
                 access_token = AccessToken(token)
-                user_id = access_token['id']  # Changed from 'user_id' to 'id'
+                user_id = access_token['user_id']
                 user = User.objects.get(user_id=user_id)
                 print(f"DEBUG: Found user: {user.user_id}")
             except Exception as e:
@@ -1065,7 +1049,7 @@ def post_like_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['id']  # Changed from 'user_id' to 'id'
+            user_id = access_token['user_id']
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1143,7 +1127,7 @@ def post_comments_view(request, post_id):
             try:
                 from rest_framework_simplejwt.tokens import AccessToken
                 access_token = AccessToken(token)
-                user_id = access_token['id']  # Changed from 'user_id' to 'id'
+                user_id = access_token['user_id']
                 user = User.objects.get(user_id=user_id)
             except Exception as e:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1198,7 +1182,7 @@ def post_delete_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['id']  # Changed from 'user_id' to 'id'
+            user_id = access_token['user_id']
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1263,7 +1247,7 @@ def post_repost_view(request, post_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['id']  # Changed from 'user_id' to 'id'
+            user_id = access_token['user_id']
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
@@ -1322,7 +1306,7 @@ def repost_delete_view(request, repost_id):
         try:
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
-            user_id = access_token['id']  # Changed from 'user_id' to 'id'
+            user_id = access_token['user_id']
             user = User.objects.get(user_id=user_id)
         except Exception as e:
             return JsonResponse({'error': 'Invalid token'}, status=401)
