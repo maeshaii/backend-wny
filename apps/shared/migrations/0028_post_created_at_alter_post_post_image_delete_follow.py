@@ -22,7 +22,15 @@ class Migration(migrations.Migration):
             name='post_image',
             field=models.ImageField(blank=True, null=True, upload_to='post_images/'),
         ),
-        migrations.DeleteModel(
-            name='Follow',
+        migrations.SeparateDatabaseAndState(
+    database_operations=[
+        migrations.RunSQL(
+            "DROP TABLE IF EXISTS shared_follow CASCADE;",
+            reverse_sql=migrations.RunSQL.noop,
+        )
+    ],
+    state_operations=[
+        # Intentionally empty: Follow was already removed elsewhere
+    ],
         ),
     ]
