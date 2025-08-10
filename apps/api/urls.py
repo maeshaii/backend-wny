@@ -57,7 +57,8 @@ urlpatterns = [
     path('admin/<int:user_id>/profile_bio/', profile_bio_view, name='profile_bio_view'),
     path('resume/update/', update_resume, name='update_resume'),
     path('resume/delete/', update_resume, name='delete_resume'),
-    path('api/alumni/profile/update/', update_alumni_profile),
+    path('alumni/profile/update/', update_alumni_profile, name='update_alumni_profile'),
+    path('alumni/profile/delete/', delete_alumni_profile_pic, name='delete_alumni_profile_pic'),
     path('search/', search_alumni, name='search_alumni'),
     
     # Posts API endpoints

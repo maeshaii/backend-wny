@@ -31,6 +31,7 @@ def alumni_list_view(request):
             'age': a.age,
             'social_media': a.social_media,
             'school_name': a.school_name,
+            'profile_pic': a.profile_pic.url if a.profile_pic else None,
         }
         for a in alumni_qs
     ]

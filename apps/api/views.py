@@ -35,6 +35,48 @@ def get_csrf_token(request):
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+# Utility: build profile_pic URL with cache-busting when possible
+def build_profile_pic_url(user):
+    try:
+        pic = getattr(user, 'profile_pic', None)
+        if pic:
+            url = pic.url
+            try:
+                modified = default_storage.get_modified_time(pic.name)
+                if modified:
+                    return f"{url}?t={int(modified.timestamp())}"
+            except Exception:
+                pass
+            return url
+    except Exception:
+        pass
+    return None
+
+# Utility: extract current user from Authorization header (Bearer/JWT) robustly
+def get_current_user_from_request(request):
+    auth_header = request.headers.get('Authorization') or request.META.get('HTTP_AUTHORIZATION')
+    if not auth_header:
+        return None
+    try:
+        parts = auth_header.strip().split()
+        token = None
+        if len(parts) == 2:
+            # Format: "Bearer <token>" or "JWT <token>"
+            token = parts[1].strip('"')
+        else:
+            # Sometimes the raw token may be provided
+            token = parts[0].strip('"')
+        if not token:
+            return None
+        from rest_framework_simplejwt.tokens import AccessToken
+        access_token = AccessToken(token)
+        current_user_id = access_token.get('user_id') or access_token.get('id')
+        if not current_user_id:
+            return None
+        return User.objects.get(user_id=int(current_user_id))
+    except Exception:
+        return None
+
 @csrf_exempt
 @require_http_methods(["POST", "OPTIONS"])
 def login_view(request):
@@ -71,7 +113,8 @@ def login_view(request):
                     'id': user.user_id,
                     'name': f"{user.f_name} {user.l_name}",
                     'year_graduated': user.year_graduated,
-                    'profile_bio': user.profile_bio,  # <-- Add this line
+                    'profile_bio': user.profile_bio,
+                    'profile_pic': build_profile_pic_url(user),
                     'account_type': {
                         'admin': user.account_type.admin,
                         'peso': user.account_type.peso,
@@ -125,6 +168,8 @@ class CustomTokenObtainPairSerializer(serializers.Serializer):
             'id': user.user_id,
             'name': f"{user.f_name} {user.l_name}",
             'year_graduated': user.year_graduated,
+            'profile_bio': user.profile_bio,
+            'profile_pic': build_profile_pic_url(user),
                 'account_type': {
                     'admin': user.account_type.admin,
                     'peso': user.account_type.peso,
@@ -417,16 +462,26 @@ def notifications_view(request):
         notifications = Notification.objects.filter(user_id=user_id).exclude(notif_type__iexact='tracker').order_by('-notif_date')
     else:
         notifications = Notification.objects.filter(user_id=user_id).exclude(notif_type__iexact='tracker').order_by('-notif_date')
-    notif_list = [
-        {
+    notif_list = []
+    import re
+    for n in notifications:
+        entry = {
             'id': n.notification_id,
             'type': n.notif_type,
             'subject': getattr(n, 'subject', None) or 'Tracker Form Reminder',
             'content': n.notifi_content,
             'date': n.notif_date.strftime('%Y-%m-%d %H:%M:%S'),
         }
-        for n in notifications
-    ]
+        # Extract follower profile link if present (e.g., /alumni/profile/<id>)
+        try:
+            match = re.search(r"/alumni/profile/(\d+)", n.notifi_content or '')
+            if match:
+                follower_id = int(match.group(1))
+                entry['link'] = f"/alumni/profile/{follower_id}"
+                entry['link_user_id'] = follower_id
+        except Exception:
+            pass
+        notif_list.append(entry)
     return JsonResponse({'success': True, 'notifications': notif_list})
 
 @csrf_exempt
@@ -441,6 +496,8 @@ def users_list_view(request):
                 'id': u.user_id,
                 'name': f"{u.f_name} {u.l_name}",
                 'profile_pic': u.profile_pic.url if u.profile_pic else None,
+                'profile_pic': build_profile_pic_url(u),
+                'batch': u.year_graduated,
             }
             for u in users
         ]
@@ -799,28 +856,27 @@ def update_alumni_profile(request):
         return Response({'message': 'Missing user_id'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        alumni = alumni.objects.get(id=user_id)
+        user = User.objects.get(user_id=user_id)
 
         bio = request.data.get('bio')
         if bio is not None:
-            alumni.profile_bio = bio
+            user.profile_bio = bio
 
         if 'profile_pic' in request.FILES:
-            alumni.profile_pic = request.FILES['profile_pic']
+            user.profile_pic = request.FILES['profile_pic']
 
-        alumni.save()
+        user.save()
 
         return Response({
             'user': {
-                'id': alumni.id,
-                'name': alumni.name,
-                'profile_pic': alumni.profile_pic.url if alumni.profile_pic else None,
-                'bio': alumni.profile_bio,
-                # add more fields if needed
+                'id': user.user_id,
+                'name': f"{user.f_name} {user.l_name}",
+                'profile_pic': user.profile_pic.url if user.profile_pic else None,
+                'bio': user.profile_bio,
             }
         })
 
-    except alumni.DoesNotExist:
+    except User.DoesNotExist:
         return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     
 
@@ -847,10 +903,38 @@ def search_alumni(request):
         'name': f"{a.f_name} {a.m_name or ''} {a.l_name}".strip(),
         'course': a.course,
         'year_graduated': a.year_graduated,
-        'profile_pic': a.profile_pic.url if a.profile_pic else None
+        'profile_pic': build_profile_pic_url(a)
     } for a in results]
 
     return Response(data)
+
+
+@api_view(['DELETE'])
+def delete_alumni_profile_pic(request):
+    user_id = request.GET.get('user_id')
+    if not user_id:
+        return Response({'message': 'Missing user_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(user_id=user_id)
+        if user.profile_pic:
+            # Delete the file from storage
+            try:
+                file_path = user.profile_pic.path
+            except Exception:
+                file_path = None
+            user.profile_pic.delete(save=False)
+            user.profile_pic = None
+            user.save()
+            # Also remove local file if path is available
+            if file_path and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+        return Response({'success': True})
+    except User.DoesNotExist:
+        return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 
@@ -885,7 +969,7 @@ def posts_view(request):
                             'user_id': repost.user.user_id,
                             'f_name': repost.user.f_name,
                             'l_name': repost.user.l_name,
-                            'profile_pic': repost.user.profile_pic.url if repost.user.profile_pic else None,
+                            'profile_pic': build_profile_pic_url(repost.user),
                         }
                     })
                 
@@ -904,7 +988,7 @@ def posts_view(request):
                         'user_id': post.user.user_id,
                         'f_name': post.user.f_name,
                         'l_name': post.user.l_name,
-                        'profile_pic': post.user.profile_pic.url if post.user.profile_pic else None,
+                        'profile_pic': build_profile_pic_url(post.user),
                     },
                     'category': {
                         'post_cat_id': post.post_cat.post_cat_id if post.post_cat else None,
@@ -1041,7 +1125,7 @@ def post_like_view(request, post_id):
         post = Post.objects.get(post_id=post_id)
         
         # Get user from token
-        auth_header = request.headers.get('Authorization')
+        auth_header = request.headers.get('Authorization') or request.META.get('HTTP_AUTHORIZATION')
         if not auth_header or not auth_header.startswith('Bearer '):
             return JsonResponse({'error': 'Authentication required'}, status=401)
         
@@ -1110,7 +1194,7 @@ def post_comments_view(request, post_id):
                         'user_id': comment.user.user_id,
                         'f_name': comment.user.f_name,
                         'l_name': comment.user.l_name,
-                        'profile_pic': comment.user.profile_pic.url if comment.user.profile_pic else None,
+                        'profile_pic': build_profile_pic_url(comment.user),
                     }
                 })
             
@@ -1350,7 +1434,7 @@ def alumni_followers_view(request, user_id):
                 'user_id': follower.user_id,
                 'ctu_id': follower.acc_username,
                 'name': f"{follower.f_name} {follower.l_name}",
-                'profile_pic': follower.profile_pic.url if follower.profile_pic else None,
+                'profile_pic': build_profile_pic_url(follower),
                 'followed_at': follow_obj.followed_at.isoformat()
             })
         return JsonResponse({
@@ -1391,7 +1475,7 @@ def alumni_following_view(request, user_id):
                 'user_id': followed_user.user_id,
                 'ctu_id': followed_user.acc_username,
                 'name': f"{followed_user.f_name} {followed_user.l_name}",
-                'profile_pic': followed_user.profile_pic.url if followed_user.profile_pic else None,
+                'profile_pic': build_profile_pic_url(followed_user),
                 'followed_at': follow_obj.followed_at.isoformat()
             })
         return JsonResponse({
@@ -1423,21 +1507,9 @@ def follow_user_view(request, user_id):
 
     try:
         # Authenticate via JWT manually to avoid issues with custom user
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
+        current_user = get_current_user_from_request(request)
+        if not current_user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
-
-        token = auth_header.split(' ')[1]
-        try:
-            from rest_framework_simplejwt.tokens import AccessToken
-            access_token = AccessToken(token)
-            # Support both 'user_id' and legacy 'id' claims
-            current_user_id = access_token.get('user_id') or access_token.get('id')
-            if not current_user_id:
-                return JsonResponse({'error': 'Invalid token'}, status=401)
-            current_user = User.objects.get(user_id=current_user_id)
-        except Exception:
-            return JsonResponse({'error': 'Invalid token'}, status=401)
 
         user_to_follow = User.objects.get(user_id=user_id)
 
@@ -1450,6 +1522,17 @@ def follow_user_view(request, user_id):
                 following=user_to_follow
             )
             if created:
+                # Notify the followed user
+                try:
+                    Notification.objects.create(
+                        user=user_to_follow,
+                        notif_type='follow',
+                        subject='New Follower',
+                        notifi_content=f"{current_user.f_name} {current_user.l_name} started following you. View profile: /alumni/profile/{current_user.user_id}",
+                        notif_date=timezone.now()
+                    )
+                except Exception:
+                    pass
                 return JsonResponse({
                     'success': True,
                     'message': f'Successfully followed {user_to_follow.f_name} {user_to_follow.l_name}'
@@ -1497,7 +1580,7 @@ def check_follow_status_view(request, user_id):
         user_to_check = User.objects.get(user_id=user_id)
         
         # Get the current user from token
-        auth_header = request.headers.get('Authorization')
+        auth_header = request.headers.get('Authorization') or request.META.get('HTTP_AUTHORIZATION')
         if not auth_header or not auth_header.startswith('Bearer '):
             # If no authentication, return not following
             return JsonResponse({
@@ -1510,7 +1593,7 @@ def check_follow_status_view(request, user_id):
             from rest_framework_simplejwt.tokens import AccessToken
             access_token = AccessToken(token)
             current_user_id = access_token.get('user_id') or access_token.get('id')
-            current_user = User.objects.get(user_id=current_user_id)
+            current_user = User.objects.get(user_id=int(current_user_id))
         except Exception as e:
             # If token is invalid, return not following
             return JsonResponse({
