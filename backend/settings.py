@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.alumni_stats",
     "apps.alumni_users",
     "apps.ojt_users",
+    "apps.ojt_stats",
     "rest_framework",
     "corsheaders",
 ]
@@ -102,7 +103,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'wny-db',
         'USER': 'postgres',
-        'PASSWORD': '12345',
+        'PASSWORD': '1131',
         'HOST': 'localhost',
         'PORT': '5432',
     }

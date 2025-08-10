@@ -31,6 +31,9 @@ def create_coordinator_account():
         else:
             print(f"✅ Using existing coordinator account type")
         
+        # Delete existing coordinator user if present
+        User.objects.filter(acc_username='coordinator').delete()
+        
         # Check if user already exists
         username = 'coordinator'
         if User.objects.filter(acc_username=username).exists():
@@ -38,8 +41,8 @@ def create_coordinator_account():
             return
         
         # Create the coordinator user
-        # Convert password "april,2,2003" to date format
-        password_date = datetime.strptime('2003-04-02', '%Y-%m-%d').date()
+        # Convert password "january,1,2001" to date format
+        password_date = datetime.strptime('2001-01-01', '%Y-%m-%d').date()
         
         coordinator_user = User.objects.create(
             account_type=coordinator_account_type,
@@ -53,7 +56,7 @@ def create_coordinator_account():
         
         print(f"✅ Successfully created coordinator account!")
         print(f"   Username: {coordinator_user.acc_username}")
-        print(f"   Password: april,2,2003 (stored as date: {coordinator_user.acc_password})")
+        print(f"   Password: january,1,2001 (stored as date: {coordinator_user.acc_password})")
         print(f"   Account Type: Coordinator")
         print(f"   Status: {coordinator_user.user_status}")
         
