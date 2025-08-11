@@ -30,6 +30,11 @@ admin.site.register(QuestionCategory)
 admin.site.register(Question)
 admin.site.register(TrackerResponse)
 
+# Register simple job models for easy viewing
+admin.site.register(SimpleInfoSystemJob)
+admin.site.register(SimpleInfoTechJob)
+admin.site.register(SimpleCompTechJob)
+
 # Custom filter for question types
 class QuestionTypeFilter(admin.SimpleListFilter):
     title = 'Document Type'
