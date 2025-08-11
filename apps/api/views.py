@@ -489,13 +489,22 @@ def notifications_view(request):
 def users_list_view(request):
     current_user_id = request.GET.get('current_user_id')
     try:
-        # Exclude admin users and the current logged-in user
-        users = User.objects.filter(account_type__admin=False).exclude(user_id=current_user_id)
+        # Parse current_user_id to int if possible for safety
+        try:
+            current_user_id_int = int(current_user_id) if current_user_id is not None else None
+        except (TypeError, ValueError):
+            current_user_id_int = None
+        
+        # Exclude admin users and the current logged-in user, pick 10 at random
+        users_qs = User.objects.filter(account_type__admin=False)
+        if current_user_id_int is not None:
+            users_qs = users_qs.exclude(user_id=current_user_id_int)
+        users = users_qs.order_by('?')[:10]
+        
         users_data = [
             {
                 'id': u.user_id,
                 'name': f"{u.f_name} {u.l_name}",
-                'profile_pic': u.profile_pic.url if u.profile_pic else None,
                 'profile_pic': build_profile_pic_url(u),
                 'batch': u.year_graduated,
             }
