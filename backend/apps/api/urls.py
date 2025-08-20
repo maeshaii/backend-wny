@@ -54,3 +54,15 @@ urlpatterns = [
     path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
 ]
 
+# Web/Mobile parity endpoints
+urlpatterns += [
+    path('posts/', views.posts_list_create_view, name='posts_list_create'),
+    path('posts/<int:post_id>/', views.post_delete_view, name='post_delete'),
+    path('posts/<int:post_id>/like/', views.post_like_view, name='post_like'),
+    path('posts/<int:post_id>/comments/', views.post_comments_view, name='post_comments'),
+    path('post-categories/', views.post_categories_view, name='post_categories'),
+    path('posts/<int:post_id>/repost/', views.repost_create_view, name='repost_create'),
+    path('reposts/<int:repost_id>/', views.repost_delete_view, name='repost_delete'),
+    path('profile/update/', views.profile_update_view, name='profile_update'),
+]
+

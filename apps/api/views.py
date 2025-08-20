@@ -982,6 +982,20 @@ def posts_view(request):
                         }
                     })
                 
+                # Check if current user has liked this post
+                is_liked = False
+                auth_header = request.headers.get('Authorization')
+                if auth_header and auth_header.startswith('Bearer '):
+                    try:
+                        from rest_framework_simplejwt.tokens import AccessToken
+                        token = auth_header.split(' ')[1]
+                        access_token = AccessToken(token)
+                        current_user_id = access_token['user_id']
+                        current_user = User.objects.get(user_id=current_user_id)
+                        is_liked = Like.objects.filter(post=post, user=current_user).exists()
+                    except:
+                        pass
+
                 posts_data.append({
                     'post_id': post.post_id,
                     'post_title': post.post_title,
@@ -992,6 +1006,7 @@ def posts_view(request):
                     'likes_count': post.likes.count(),
                     'comments_count': post.comments.count(),
                     'reposts_count': post.reposts.count(),
+                    'is_liked': is_liked,
                     'reposts': repost_data,
                     'user': {
                         'user_id': post.user.user_id,
@@ -1098,15 +1113,7 @@ def posts_view(request):
                         post_image=None,
                         type=data.get('type', 'personal')
                     )
-            else:
-                post = Post.objects.create(
-                    user=user,
-                    post_cat=post_category,
-                    post_title=data.get('post_title', ''),
-                    post_content=data.get('post_content', ''),
-                    post_image=post_image,
-                    type=data.get('type', 'personal')
-                )
+            
             print(f"DEBUG: Created post: {post.post_id}")
             
             return JsonResponse({
@@ -1118,6 +1125,99 @@ def posts_view(request):
             import traceback
             print(f"DEBUG: Error creating post: {str(e)}")
             print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            return JsonResponse({'error': str(e)}, status=500)
+
+# New view for filtering posts by user account type
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def posts_by_user_type_view(request):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    if request.method == "GET":
+        try:
+            user_type = request.GET.get('user_type')
+            if user_type not in ['peso', 'admin']:
+                return JsonResponse({'error': 'Invalid user_type. Must be "peso" or "admin"'}, status=400)
+            
+            # Filter posts by user account type
+            if user_type == 'peso':
+                # Get posts from PESO users (alumni/OJT users)
+                posts = Post.objects.filter(
+                    user__account_type__peso=True
+                ).select_related('user', 'post_cat').order_by('-post_id')
+            else:  # admin
+                # Get posts from admin users
+                posts = Post.objects.filter(
+                    user__account_type__admin=True
+                ).select_related('user', 'post_cat').order_by('-post_id')
+            
+            posts_data = []
+            
+            for post in posts:
+                # Get repost information
+                reposts = Repost.objects.filter(post=post).select_related('user')
+                repost_data = []
+                
+                for repost in reposts:
+                    repost_data.append({
+                        'repost_id': repost.repost_id,
+                        'repost_date': repost.repost_date.isoformat(),
+                        'user': {
+                            'user_id': repost.user.user_id,
+                            'f_name': repost.user.f_name,
+                            'l_name': repost.user.l_name,
+                            'profile_pic': build_profile_pic_url(repost.user),
+                        }
+                    })
+                
+                # Check if current user has liked this post
+                is_liked = False
+                auth_header = request.headers.get('Authorization')
+                if auth_header and auth_header.startswith('Bearer '):
+                    try:
+                        from rest_framework_simplejwt.tokens import AccessToken
+                        token = auth_header.split(' ')[1]
+                        access_token = AccessToken(token)
+                        current_user_id = access_token['user_id']
+                        current_user = User.objects.get(user_id=current_user_id)
+                        is_liked = Like.objects.filter(post=post, user=current_user).exists()
+                    except:
+                        pass
+
+                posts_data.append({
+                    'post_id': post.post_id,
+                    'post_title': post.post_title,
+                    'post_content': post.post_content,
+                    'post_image': post.post_image.url if post.post_image else None,
+                    'type': post.type,
+                    'created_at': post.created_at.isoformat() if hasattr(post, 'created_at') else None,
+                    'likes_count': post.likes.count(),
+                    'comments_count': post.comments.count(),
+                    'reposts_count': post.reposts.count(),
+                    'is_liked': is_liked,
+                    'reposts': repost_data,
+                    'user': {
+                        'user_id': post.user.user_id,
+                        'f_name': post.user.f_name,
+                        'l_name': post.user.l_name,
+                        'profile_pic': build_profile_pic_url(post.user),
+                    },
+                    'category': {
+                        'post_cat_id': post.post_cat.post_cat_id if post.post_cat else None,
+                        'events': post.post_cat.events if post.post_cat else False,
+                        'announcements': post.post_cat.announcements if post.post_cat else False,
+                        'donation': post.post_cat.donation if post.post_cat else False,
+                        'personal': post.post_cat.personal if post.post_cat else False,
+                    }
+                })
+            
+            return JsonResponse({'posts': posts_data})
+        except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt

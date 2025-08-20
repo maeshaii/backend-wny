@@ -2,7 +2,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_date
-from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse, OJTImport
+from apps.shared.models import User, AccountType, QuestionCategory, TrackerResponse, OJTImport, Post, PostCategory, Like, Comment, Repost
 import json
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -432,6 +432,263 @@ def delete_notifications_view(request):
         return JsonResponse({'success': True, 'deleted': deleted})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+# ----------------------
+# Helper utilities
+# ----------------------
+from rest_framework_simplejwt.tokens import AccessToken
+
+def get_user_from_request(request):
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Bearer '):
+        return None
+    token = auth_header.split(' ', 1)[1].strip()
+    try:
+        access = AccessToken(token)
+        user_id = access.get('user_id')
+        if not user_id:
+            return None
+        return User.objects.get(pk=user_id)
+    except Exception:
+        return None
+
+def cors_ok_response(payload=None, status=200):
+    if payload is None:
+        payload = {'detail': 'OK'}
+    response = JsonResponse(payload, status=status, safe=not isinstance(payload, list))
+    response["Access-Control-Allow-Origin"] = "*"
+    response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-CSRFToken"
+    return response
+
+# ----------------------
+# Social posts and profile endpoints (web/mobile parity)
+# ----------------------
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "OPTIONS"])
+def posts_list_create_view(request):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+
+    if request.method == "GET":
+        # Filter posts to only show admin posts
+        posts = Post.objects.select_related('user', 'post_cat').filter(
+            user__account_type__admin=True
+        ).order_by('-post_id')[:100]
+        
+        def serialize_post(p: Post):
+            # Check if current user has liked this post
+            current_user = get_user_from_request(request)
+            is_liked = False
+            if current_user:
+                is_liked = Like.objects.filter(post=p, user=current_user).exists()
+            
+            return {
+                'id': p.post_id,
+                'post_title': p.post_title,
+                'post_content': p.post_content,
+                'post_image': p.post_image,
+                'type': p.type,
+                'post_cat_id': p.post_cat.post_cat_id if p.post_cat_id else None,
+                'created_at': p.created_at.isoformat() if hasattr(p, 'created_at') and p.created_at else datetime.now().isoformat(),
+                'updated_at': p.updated_at.isoformat() if hasattr(p, 'updated_at') and p.updated_at else datetime.now().isoformat(),
+                'user': {
+                    'id': p.user.user_id,
+                    'username': p.user.acc_username,
+                    'first_name': p.user.f_name,
+                    'last_name': p.user.l_name,
+                },
+                'likes_count': Like.objects.filter(post=p).count(),
+                'comments_count': Comment.objects.filter(post=p).count(),
+                'is_liked': is_liked,
+            }
+        return cors_ok_response({'success': True, 'posts': [serialize_post(p) for p in posts]})
+
+    # POST create
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        data = json.loads(request.body or '{}')
+        title = data.get('post_title')
+        content = data.get('post_content')
+        image = data.get('post_image', '')
+        post_cat_id = data.get('post_cat_id')
+        post_type = data.get('type')
+        if not title or not content or not post_cat_id:
+            return cors_ok_response({'success': False, 'message': 'Missing fields'}, status=400)
+        try:
+            category = PostCategory.objects.get(post_cat_id=post_cat_id)
+        except PostCategory.DoesNotExist:
+            return cors_ok_response({'success': False, 'message': 'Invalid post category'}, status=400)
+        post = Post.objects.create(
+            user=user,
+            post_cat=category,
+            post_title=title,
+            post_content=content,
+            post_image=image or '',
+            type=post_type or None,
+        )
+        return cors_ok_response({'success': True, 'post': {
+            'id': post.post_id,
+            'post_title': post.post_title,
+            'post_content': post.post_content,
+            'post_image': post.post_image,
+            'type': post.type,
+            'post_cat_id': post.post_cat.post_cat_id,
+        }})
+    except Exception as e:
+        return cors_ok_response({'success': False, 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE", "OPTIONS"])
+def post_delete_view(request, post_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        post = Post.objects.get(post_id=post_id)
+        if post.user_id != user.user_id and not getattr(user.account_type, 'admin', False):
+            return cors_ok_response({'success': False, 'message': 'Forbidden'}, status=403)
+        post.delete()
+        return cors_ok_response({'success': True})
+    except Post.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["POST", "DELETE", "OPTIONS"])
+def post_like_view(request, post_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        post = Post.objects.get(post_id=post_id)
+    except Post.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+    if request.method == "POST":
+        Like.objects.get_or_create(user=user, post=post)
+    else:  # DELETE
+        Like.objects.filter(user=user, post=post).delete()
+    count = Like.objects.filter(post=post).count()
+    return cors_ok_response({'success': True, 'likes_count': count})
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST", "OPTIONS"])
+def post_comments_view(request, post_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    try:
+        post = Post.objects.get(post_id=post_id)
+    except Post.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+    if request.method == "GET":
+        comments = Comment.objects.filter(post=post).select_related('user').order_by('date_created')
+        data = [
+            {
+                'id': c.comment_id,
+                'comment_content': c.comment_content,
+                'user': {
+                    'id': c.user.user_id,
+                    'name': f"{c.user.f_name} {c.user.l_name}",
+                },
+                'date_created': c.date_created.isoformat() if c.date_created else None,
+            } for c in comments
+        ]
+        return cors_ok_response({'success': True, 'comments': data})
+    # POST create comment
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        data = json.loads(request.body or '{}')
+        content = data.get('comment_content')
+        if not content:
+            return cors_ok_response({'success': False, 'message': 'Missing comment_content'}, status=400)
+        comment = Comment.objects.create(user=user, post=post, comment_content=content, date_created=timezone.now())
+        return cors_ok_response({'success': True, 'comment': {
+            'id': comment.comment_id,
+            'comment_content': comment.comment_content,
+        }})
+    except Exception as e:
+        return cors_ok_response({'success': False, 'message': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def post_categories_view(request):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    categories = PostCategory.objects.all().order_by('post_cat_id')
+    data = [{'post_cat_id': c.post_cat_id, 'events': c.events, 'announcements': c.announcements, 'donation': c.donation, 'personal': c.personal} for c in categories]
+    return cors_ok_response({'success': True, 'categories': data})
+
+
+@csrf_exempt
+@require_http_methods(["POST", "OPTIONS"])
+def repost_create_view(request, post_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        post = Post.objects.get(post_id=post_id)
+        repost = Repost.objects.create(post=post, user=user, repost_date=timezone.now())
+        return cors_ok_response({'success': True, 'repost_id': repost.repost_id})
+    except Post.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE", "OPTIONS"])
+def repost_delete_view(request, repost_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        repost = Repost.objects.get(repost_id=repost_id)
+        if repost.user_id != user.user_id and not getattr(user.account_type, 'admin', False):
+            return cors_ok_response({'success': False, 'message': 'Forbidden'}, status=403)
+        repost.delete()
+        return cors_ok_response({'success': True})
+    except Repost.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "OPTIONS"])
+def profile_update_view(request):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    user = get_user_from_request(request)
+    if not user:
+        return cors_ok_response({'success': False, 'message': 'Unauthorized'}, status=401)
+    try:
+        data = json.loads(request.body or '{}')
+        bio = data.get('bio')
+        profile_pic = data.get('profile_pic')
+        if bio is not None:
+            user.profile_bio = bio
+        if profile_pic is not None:
+            user.profile_pic = profile_pic
+        user.save()
+        return cors_ok_response({'success': True, 'user': {
+            'id': user.user_id,
+            'profile_bio': user.profile_bio,
+            'profile_pic': user.profile_pic,
+        }})
+    except Exception as e:
+        return cors_ok_response({'success': False, 'message': str(e)}, status=500)
 
 # OJT-specific import function for coordinators
 @csrf_exempt

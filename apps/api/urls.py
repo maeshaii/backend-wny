@@ -63,6 +63,7 @@ urlpatterns = [
     
     # Posts API endpoints
     path('posts/', views.posts_view, name='posts'),
+    path('posts/by-user-type/', views.posts_by_user_type_view, name='posts_by_user_type'),
     path('posts/<int:post_id>/like/', views.post_like_view, name='post_like'),
     path('posts/<int:post_id>/comments/', views.post_comments_view, name='post_comments'),
     path('posts/<int:post_id>/', views.post_delete_view, name='post_delete'),
