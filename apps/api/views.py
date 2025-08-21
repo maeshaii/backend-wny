@@ -966,7 +966,7 @@ def posts_view(request):
             posts_data = []
             
             for post in posts:
-                # Get repost information
+                # Get repost information for THIS specific post
                 reposts = Repost.objects.filter(post=post).select_related('user')
                 repost_data = []
                 
@@ -982,6 +982,23 @@ def posts_view(request):
                         }
                     })
                 
+                # Get comments for THIS specific post
+                comments = Comment.objects.filter(post=post).select_related('user').order_by('-date_created')
+                comments_data = []
+                
+                for comment in comments:
+                    comments_data.append({
+                        'comment_id': comment.comment_id,
+                        'comment_content': comment.comment_content,
+                        'date_created': comment.date_created.isoformat() if comment.date_created else None,
+                        'user': {
+                            'user_id': comment.user.user_id,
+                            'f_name': comment.user.f_name,
+                            'l_name': comment.user.l_name,
+                            'profile_pic': build_profile_pic_url(comment.user),
+                        }
+                    })
+
                 posts_data.append({
                     'post_id': post.post_id,
                     'post_title': post.post_title,
@@ -993,6 +1010,7 @@ def posts_view(request):
                     'comments_count': post.comments.count(),
                     'reposts_count': post.reposts.count(),
                     'reposts': repost_data,
+                    'comments': comments_data,
                     'user': {
                         'user_id': post.user.user_id,
                         'f_name': post.user.f_name,
@@ -1064,8 +1082,7 @@ def posts_view(request):
                 # Handle base64 image data
                 import base64
                 from django.core.files.base import ContentFile
-                from django.core.files.uploadedfile import InMemoryUploadedFile
-                import io
+                import uuid
                 
                 try:
                     # Extract base64 data
@@ -1073,7 +1090,6 @@ def posts_view(request):
                     ext = format.split('/')[-1]
                     
                     # Create file name
-                    import uuid
                     filename = f"post_image_{uuid.uuid4()}.{ext}"
                     
                     # Convert base64 to file
@@ -1099,12 +1115,13 @@ def posts_view(request):
                         type=data.get('type', 'personal')
                     )
             else:
+                # If it's a URL or path, try to use it directly (rare)
                 post = Post.objects.create(
                     user=user,
                     post_cat=post_category,
                     post_title=data.get('post_title', ''),
                     post_content=data.get('post_content', ''),
-                    post_image=post_image,
+                    post_image=None,
                     type=data.get('type', 'personal')
                 )
             print(f"DEBUG: Created post: {post.post_id}")
@@ -1112,6 +1129,7 @@ def posts_view(request):
             return JsonResponse({
                 'success': True,
                 'post_id': post.post_id,
+                'post_image': post.post_image.url if post.post_image else None,
                 'message': 'Post created successfully'
             })
         except Exception as e:
