@@ -998,6 +998,19 @@ def posts_view(request):
                             'profile_pic': build_profile_pic_url(comment.user),
                         }
                     })
+                
+                # Get likes for THIS specific post with user information
+                likes = Like.objects.filter(post=post).select_related('user')
+                likes_data = []
+                
+                for like in likes:
+                    likes_data.append({
+                        'like_id': like.like_id,
+                        'user_id': like.user.user_id,
+                        'f_name': like.user.f_name,
+                        'l_name': like.user.l_name,
+                        'profile_pic': build_profile_pic_url(like.user),
+                    })
 
                 posts_data.append({
                     'post_id': post.post_id,
@@ -1006,9 +1019,10 @@ def posts_view(request):
                     'post_image': post.post_image.url if post.post_image else None,
                     'type': post.type,
                     'created_at': post.created_at.isoformat() if hasattr(post, 'created_at') else None,
-                    'likes_count': post.likes.count(),
+                    'likes_count': len(likes_data),
                     'comments_count': post.comments.count(),
                     'reposts_count': post.reposts.count(),
+                    'likes': likes_data,
                     'reposts': repost_data,
                     'comments': comments_data,
                     'user': {
