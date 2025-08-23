@@ -62,6 +62,8 @@ urlpatterns += [
     path('posts/<int:post_id>/comments/', views.post_comments_view, name='post_comments'),
     path('post-categories/', views.post_categories_view, name='post_categories'),
     path('posts/<int:post_id>/repost/', views.repost_create_view, name='repost_create'),
+    path('posts/<int:post_id>/likes/', views.post_likes_list_view, name='post_likes_list'),
+    path('posts/<int:post_id>/reposts/', views.post_reposts_list_view, name='post_reposts_list'),
     path('reposts/<int:repost_id>/', views.repost_delete_view, name='repost_delete'),
     path('profile/update/', views.profile_update_view, name='profile_update'),
 ]

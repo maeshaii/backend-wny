@@ -666,6 +666,47 @@ def repost_delete_view(request, repost_id: int):
 
 
 @csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def post_likes_list_view(request, post_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    try:
+        post = Post.objects.get(post_id=post_id)
+    except Post.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+    likes = Like.objects.filter(post=post).select_related('user')
+    data = [
+        {
+            'id': l.user.user_id,
+            'name': f"{l.user.f_name} {l.user.l_name}",
+            'profile_pic': getattr(l.user, 'profile_pic', None),
+        }
+        for l in likes
+    ]
+    return cors_ok_response({'success': True, 'likes': data})
+
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def post_reposts_list_view(request, post_id: int):
+    if request.method == "OPTIONS":
+        return cors_ok_response()
+    try:
+        post = Post.objects.get(post_id=post_id)
+    except Post.DoesNotExist:
+        return cors_ok_response({'success': False, 'message': 'Not found'}, status=404)
+    reposts = Repost.objects.filter(post=post).select_related('user').order_by('repost_date')
+    data = [
+        {
+            'id': r.user.user_id,
+            'name': f"{r.user.f_name} {r.user.l_name}",
+            'profile_pic': getattr(r.user, 'profile_pic', None),
+            'repost_date': r.repost_date.isoformat() if r.repost_date else None,
+        }
+        for r in reposts
+    ]
+    return cors_ok_response({'success': True, 'reposts': data})
+@csrf_exempt
 @require_http_methods(["PUT", "OPTIONS"])
 def profile_update_view(request):
     if request.method == "OPTIONS":
