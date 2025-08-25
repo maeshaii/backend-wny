@@ -134,7 +134,7 @@ class Post(models.Model):
     post_image = models.ImageField(upload_to='post_images/', null=True, blank=True)
     post_content = models.TextField()
     type = models.CharField(max_length=50, null=True, blank=True)
-    # created_at = models.DateTimeField(auto_now_add=True)  # Temporarily commented out for migration
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class Qpro(models.Model):
     qpro_id = models.AutoField(primary_key=True)
