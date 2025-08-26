@@ -112,7 +112,31 @@ def alumni_statistics_view(request):
             alumni_qs = alumni_qs.filter(academic_info__year_graduated=year)
         if course and course != 'ALL':
             alumni_qs = alumni_qs.filter(academic_info__course=course)
-        status_counts = Counter(alumni_qs.values_list('user_status', flat=True))
+
+        total_alumni = alumni_qs.count()
+
+        # Use tracker answers for employment buckets
+        from apps.shared.models import TrackerData, EmploymentHistory
+        tracker_qs = TrackerData.objects.filter(user__in=alumni_qs)
+        employed = 0
+        unemployed = 0
+        for t in tracker_qs:
+            status = (t.q_employment_status or '').strip().lower()
+            if status == 'yes':
+                employed += 1
+            elif status == 'no':
+                unemployed += 1
+
+        absorbed = EmploymentHistory.objects.filter(user__in=alumni_qs, absorbed=True).count()
+        pending = max(total_alumni - employed - unemployed - absorbed, 0)
+
+        status_counts = {
+            'Employed': employed,
+            'Unemployed': unemployed,
+            'Absorb': absorbed,
+            'Pending': pending,
+        }
+
         year_counts = Counter(
             User.objects.filter(account_type__user=True)
             .select_related('academic_info')
@@ -121,7 +145,7 @@ def alumni_statistics_view(request):
         filtered_year_counts = {y: c for y, c in year_counts.items() if y is not None}
         return JsonResponse({
             'success': True,
-            'status_counts': dict(status_counts),
+            'status_counts': status_counts,
             'years': [
                 {'year': year, 'count': count}
                 for year, count in sorted(filtered_year_counts.items(), reverse=True)

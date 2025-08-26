@@ -40,7 +40,7 @@ def create_coordinator_account():
             print(f"❌ User with username '{username}' already exists!")
             return
         
-        # Create the coordinator user with secure password
+        # Create the coordinator user with requested password
         coordinator_password = 'coordiwherenayou2025'
         
         coordinator_user = User.objects.create(
@@ -49,7 +49,7 @@ def create_coordinator_account():
             user_status='active',
             f_name='Coordinator',
             l_name='User',
-            gender='Not specified'
+            gender='N/A'  # keep within max_length=10
         )
         coordinator_user.set_password(coordinator_password)
         coordinator_user.save()

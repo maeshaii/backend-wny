@@ -71,7 +71,8 @@ def alumni_detail_view(request, user_id):
     """
     from apps.shared.models import TrackerResponse, Question
     try:
-        user = User.objects.get(user_id=user_id)
+        # Always pull related data to avoid extra queries and ensure academic_info is available
+        user = User.objects.select_related('profile', 'academic_info').get(user_id=user_id)
         tracker_responses = TrackerResponse.objects.filter(user=user).order_by('-submitted_at')
         latest_tracker = tracker_responses.first() if tracker_responses.exists() else None
         tracker_answers = latest_tracker.answers if latest_tracker and latest_tracker.answers else {}
@@ -80,8 +81,13 @@ def alumni_detail_view(request, user_id):
             qids = [int(qid) for qid in tracker_answers.keys() if str(qid).isdigit()]
             for q in Question.objects.filter(id__in=qids):
                 question_text_map[q.text.lower()] = tracker_answers.get(str(q.id)) or tracker_answers.get(q.id)
+
         def get_field(field, *question_labels):
             return get_field_from_question_map(user, question_text_map, field, *question_labels)
+
+        academic_info = getattr(user, 'academic_info', None)
+        batch_year = getattr(academic_info, 'year_graduated', None)
+
         data = {
             'id': user.user_id,
             'ctu_id': user.acc_username,
@@ -90,19 +96,20 @@ def alumni_detail_view(request, user_id):
             'profile_bio': user.profile.profile_bio if hasattr(user, 'profile') and user.profile else None,
             'middle_name': get_field('m_name', 'middle name'),
             'last_name': get_field('l_name', 'last name'),
-            'course': get_field('course', 'course'),
-            'batch': get_field('year_graduated', 'batch', 'year graduated'),
+            'course': getattr(academic_info, 'course', None) if academic_info else get_field('course', 'course'),
+            # Always prefer academic_info.year_graduated for batch
+            'batch': batch_year if batch_year is not None else get_field('year_graduated', 'batch', 'year graduated'),
             'status': get_field('user_status', 'status'),
             'gender': get_field('gender', 'gender'),
             'birthdate': get_field('birthdate', 'birthdate', 'birth date', 'birthday', 'date of birth', 'dob', 'bday'),
             'phone': get_field('phone_num', 'phone', 'contact', 'mobile'),
             'address': get_field('address', 'address'),
             'email': get_field('email', 'email'),
-            'program': get_field('program', 'program'),
+            'program': getattr(academic_info, 'program', None) if academic_info else get_field('program', 'program'),
             'civil_status': get_field('civil_status', 'civil status'),
             'age': get_field('age', 'age'),
             'social_media': get_field('social_media', 'social media'),
-            'school_name': get_field('school_name', 'school name'),
+            'school_name': getattr(academic_info, 'school_name', None) if academic_info else get_field('school_name', 'school name'),
         }
         return JsonResponse({'success': True, 'alumni': data})
     except User.DoesNotExist as e:
