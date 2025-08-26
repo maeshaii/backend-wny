@@ -138,10 +138,6 @@ class Migration(migrations.Migration):
             name='shared_user_q_pursu_434271_idx',
         ),
         migrations.RemoveField(
-            model_name='post',
-            name='created_at',
-        ),
-        migrations.RemoveField(
             model_name='user',
             name='absorbed',
         ),
