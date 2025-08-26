@@ -116,6 +116,10 @@ trial/
    python manage.py runserver
    ```
 
+### Scripts Directory
+- All one-off scripts for data maintenance, backfills, or admin tasks should be placed in `backend-wny/scripts/` or converted to Django management commands under `apps/shared/management/commands/`.
+- Remove or archive scripts from the backend root after migration.
+
 ### Frontend Setup
 1. Navigate to the web-frontend directory:
    ```bash

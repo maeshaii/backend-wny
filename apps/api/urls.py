@@ -2,11 +2,27 @@ from django.urls import path, include
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view, import_ojt_view, ojt_statistics_view, ojt_by_year_view
-from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view
-from .views import CustomTokenObtainPairView, send_reminder_view, notifications_view, delete_notifications_view
-from apps.tracker.views import tracker_questions_view, tracker_responses_view, add_category_view, delete_category_view, delete_question_view, add_question_view, update_category_view, update_question_view, update_tracker_form_title_view, submit_tracker_response_view, tracker_responses_by_user_view, tracker_form_view, check_user_tracker_status_view, tracker_accepting_responses_view, update_tracker_accepting_responses_view, get_active_tracker_form, file_upload_stats_view
+from apps.tracker.views import (
+    tracker_questions_view,
+    tracker_responses_view,
+    add_category_view,
+    delete_category_view,
+    delete_question_view,
+    add_question_view,
+    update_category_view,
+    update_question_view,
+    update_tracker_form_title_view,
+    submit_tracker_response_view,
+    tracker_responses_by_user_view,
+    tracker_form_view,
+    check_user_tracker_status_view,
+    tracker_accepting_responses_view,
+    update_tracker_accepting_responses_view,
+    get_active_tracker_form,
+    file_upload_stats_view,
+)
 from apps.alumni_users.views import alumni_list_view, alumni_detail_view
-from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel
+from apps.shared.views import export_alumni_excel, import_alumni_excel, import_exported_alumni_excel, export_initial_passwords
 from .views import *
 
 urlpatterns = [
@@ -14,11 +30,12 @@ urlpatterns = [
     path('login/', views.login_view, name='login_view'),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('import-alumni/', views.import_alumni_view, name='import_alumni'),
+    # Alumni import/export (keep single implementation)
     path('alumni/statistics/', views.alumni_statistics_view, name='alumni_statistics'),
     path('alumni/list/', views.alumni_list_view, name='alumni_list'),
     path('alumni-list/', alumni_list_view, name='alumni_list_alias'),
     path('export-alumni/', export_alumni_excel, name='export_alumni_excel'),
+    path('export-initial-passwords/', export_initial_passwords, name='export_initial_passwords'),
     path('import-alumni/', import_alumni_excel, name='import_alumni_excel'),
     path('import-exported-alumni/', import_exported_alumni_excel, name='import_exported_alumni_excel'),
      
@@ -56,7 +73,7 @@ urlpatterns = [
     path('tracker/active-form/', get_active_tracker_form, name='get_active_tracker_form'),
     path('admin/<int:user_id>/profile_bio/', profile_bio_view, name='profile_bio_view'),
     path('resume/update/', update_resume, name='update_resume'),
-    path('resume/delete/', update_resume, name='delete_resume'),
+    path('resume/delete/', delete_resume, name='delete_resume'),
     path('alumni/profile/update/', update_alumni_profile, name='update_alumni_profile'),
     path('alumni/profile/delete/', delete_alumni_profile_pic, name='delete_alumni_profile_pic'),
     path('search/', search_alumni, name='search_alumni'),
