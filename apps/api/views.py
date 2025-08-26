@@ -949,6 +949,23 @@ def delete_alumni_profile_pic(request):
 
 # mobile side
 
+def build_profile_pic_url(user):
+    """Build profile picture URL for a user"""
+    try:
+        if getattr(user, 'profile_pic', None):
+            pic = user.profile_pic
+            return pic.url if hasattr(pic, 'url') else None
+    except Exception:
+        pass
+    return None
+
+def _add_cors_headers(resp: JsonResponse) -> JsonResponse:
+    """Add CORS headers to response"""
+    resp["Access-Control-Allow-Origin"] = "*"
+    resp["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+    return resp
+
 @csrf_exempt
 @require_http_methods(["GET", "POST", "OPTIONS"])
 def posts_view(request):
@@ -1023,9 +1040,9 @@ def posts_view(request):
                     }
                 })
             
-            return JsonResponse({'posts': posts_data})
+            return _add_cors_headers(JsonResponse({'posts': posts_data}))
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return _add_cors_headers(JsonResponse({'error': str(e)}, status=500))
 
     elif request.method == "POST":
         try:
@@ -1035,7 +1052,7 @@ def posts_view(request):
             # Get user from token
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Bearer '):
-                return JsonResponse({'error': 'Authentication required'}, status=401)
+                return _add_cors_headers(JsonResponse({'error': 'Authentication required'}, status=401))
             
             token = auth_header.split(' ')[1]
             # Validate JWT token and get user
@@ -1050,7 +1067,7 @@ def posts_view(request):
                 print(f"DEBUG: Found user: {user.user_id}")
             except Exception as e:
                 print(f"DEBUG: Token error: {e}")
-                return JsonResponse({'error': 'Invalid token'}, status=401)
+                return _add_cors_headers(JsonResponse({'error': 'Invalid token'}, status=401))
             
             # Validate post category exists
             post_cat_id = data.get('post_cat_id')
@@ -1059,7 +1076,7 @@ def posts_view(request):
                 print(f"DEBUG: Found category: {post_category.post_cat_id}")
             except PostCategory.DoesNotExist:
                 print(f"DEBUG: Category {post_cat_id} not found")
-                return JsonResponse({'error': 'Invalid post category'}, status=400)
+                return _add_cors_headers(JsonResponse({'error': 'Invalid post category'}, status=400))
             
             # Create the post
             post_image = data.get('post_image', '')
@@ -1116,16 +1133,16 @@ def posts_view(request):
             
             print(f"DEBUG: Created post: {post.post_id}")
             
-            return JsonResponse({
+            return _add_cors_headers(JsonResponse({
                 'success': True,
                 'post_id': post.post_id,
                 'message': 'Post created successfully'
-            })
+            }))
         except Exception as e:
             import traceback
             print(f"DEBUG: Error creating post: {str(e)}")
             print(f"DEBUG: Traceback: {traceback.format_exc()}")
-            return JsonResponse({'error': str(e)}, status=500)
+            return _add_cors_headers(JsonResponse({'error': str(e)}, status=500))
 
 # New view for filtering posts by user account type
 @csrf_exempt

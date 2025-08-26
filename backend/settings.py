@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     "apps.alumni_stats",
     "apps.alumni_users",
     "apps.ojt_users",
-    "apps.ojt_stats",
     "rest_framework",
     "corsheaders",
 ]
@@ -167,6 +166,3 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = 'shared.User'
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # or higher if needed
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB or higher
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB or higher
