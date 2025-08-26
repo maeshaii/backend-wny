@@ -523,6 +523,14 @@ def import_ojt_view(request):
                 }
                 missing_fields = [key for key, value in required_data.items() if not value]
 
+                # --- CTU_ID must be exactly 7 digits ---
+                if len(ctu_id) != 7 or not ctu_id.isdigit():
+                    error_msg = f"Row {index + 2}: CTU ID '{ctu_id}' must be exactly 7 digits."
+                    print(f"SKIPPING: {error_msg}")
+                    errors.append(error_msg)
+                    skipped_count += 1
+                    continue
+
                 if missing_fields:
                     error_msg = f"Row {index + 2}: Missing or invalid required fields - {', '.join(missing_fields)}"
                     print(f"SKIPPING: {error_msg}")

@@ -62,7 +62,8 @@ const AlumniData: React.FC = () => {
   }, [year]);
 
   const filteredAlumni = alumniList.filter((alumni) => {
-    const matchCourse = selectedCourse === 'All' || alumni.course === selectedCourse;
+    const programValue = alumni.program || alumni.Program_Name || alumni.course;
+    const matchCourse = selectedCourse === 'All' || programValue === selectedCourse;
     const matchSearch = (alumni.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchCourse && matchSearch;
   });
@@ -121,16 +122,17 @@ const AlumniData: React.FC = () => {
   <button
               onClick={() => navigate(-1)}
               style={{
-                background: 'none',
                 border: 'none',
-                color: 'white',
-                fontSize: '20px',
+      background: 'transparent',
+      color: '#ffffff',
+      fontSize: 24,
                 cursor: 'pointer',
-                fontWeight: 'bold',
-                marginBottom: '20px',
+      padding: 4,
               }}
+    aria-label="Back"
+    title="Back"
             >
-              &lt; Back
+    ↶
             </button>
 
   {/* Centered Title */}
@@ -194,7 +196,7 @@ const AlumniData: React.FC = () => {
       <option value="All">All</option>
       <option value="BSIT">BSIT</option>
       <option value="BSIS">BSIS</option>
-      <option value="BSCT">BIT-CT</option>
+      <option value="BSCS">BSCS</option>
     </select>
   </div>
 </div>
@@ -261,57 +263,233 @@ const AlumniData: React.FC = () => {
             left: 0,
             width: '100vw',
             height: '100vh',
-            background: 'rgba(0,0,0,0.4)',
+            background: 'rgba(0,0,0,0.7)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 9999,
           }}>
-            <div style={{ background: 'white', padding: '32px', borderRadius: '16px', minWidth: '400px', maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-              {/* Back Button */}
-              <button onClick={closeModal} style={{ position: 'absolute', top: 16, left: 16, background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: 16, cursor: 'pointer', fontWeight: 600 }}>&lt; Back</button>
-              <h2 style={{ marginBottom: 16, marginTop: 40, textAlign: 'center' }}>Alumni Details</h2>
-              <table style={{ width: '100%', fontSize: 14 }}>
-                <tbody>
-                  {Object.entries({
-                    'CTU ID': modalAlumni.ctu_id || modalAlumni.CTU_ID || getTrackerAnswerByLabel('ctu id'),
-                    'First Name': modalAlumni.firstName || modalAlumni.First_Name || modalAlumni.first_name || (modalAlumni.name ? modalAlumni.name.split(' ')[0] : '') || getTrackerAnswerByLabel('first name'),
-                    'Middle Name': modalAlumni.middleName || modalAlumni.Middle_Name || modalAlumni.middle_name || (modalAlumni.name && modalAlumni.name.split(' ').length > 2 ? modalAlumni.name.split(' ').slice(1, -1).join(' ') : '') || getTrackerAnswerByLabel('middle name'),
-                    'Last Name': modalAlumni.lastName || modalAlumni.Last_Name || modalAlumni.last_name || (modalAlumni.name ? modalAlumni.name.split(' ').slice(-1)[0] : '') || getTrackerAnswerByLabel('last name'),
-                    'Gender': modalAlumni.gender || modalAlumni.Gender || getTrackerAnswerByLabel('gender'),
-                    'Birthdate': modalAlumni.birthdate || modalAlumni.Birthdate || modalAlumni.birth_date || getTrackerAnswerByLabel('birthdate'),
-                    'Phone Number': modalAlumni.phone_num || modalAlumni.Phone_Number || modalAlumni.phone || getTrackerAnswerByLabel('phone'),
-                    'Address': modalAlumni.address || modalAlumni.Address || getTrackerAnswerByLabel('address'),
-                    'Social Media': modalAlumni.social_media || modalAlumni.Social_Media || getTrackerAnswerByLabel('social'),
-                    'Civil Status': modalAlumni.civil_status || modalAlumni.Civil_Status || getTrackerAnswerByLabel('civil status'),
-                    'Age': modalAlumni.age || modalAlumni.Age || getTrackerAnswerByLabel('age'),
-                    'Email': modalAlumni.email || modalAlumni.Email || getTrackerAnswerByLabel('email'),
-                    'Program Name': modalAlumni.program || modalAlumni.Program_Name || modalAlumni.course || getTrackerAnswerByLabel('program'),
-                    'Status': modalAlumni.status || modalAlumni.Status || modalAlumni.user_status || getTrackerAnswerByLabel('status'),
-                    'Company name current': modalAlumni.company_name_current || modalAlumni['Company name current'] || modalAlumni.company || getTrackerAnswerByLabel('company') || getTrackerAnswerByLabel('employer') || getTrackerAnswerByLabel('current company'),
-                    'Position current': modalAlumni.position_current || modalAlumni['Position current'] || getTrackerAnswerByLabel('position'),
-                    'Sector current': modalAlumni.sector_current || modalAlumni['Sector current'] || getTrackerAnswerByLabel('sector'),
-                    'Employment duration current': modalAlumni.employment_duration_current || modalAlumni['Employment duration current'] || modalAlumni.employment_duration || getTrackerAnswerByLabel('employment duration') || getTrackerAnswerByLabel('how long') || getTrackerAnswerByLabel('duration'),
-                    'Salary current': modalAlumni.salary_current || modalAlumni['Salary current'] || getTrackerAnswerByLabel('salary'),
-                    'Supporting document current': modalAlumni.supporting_document_current || modalAlumni['Supporting document current'] || getTrackerAnswerByLabel('supporting document'),
-                    'Awards recognition current': modalAlumni.awards_recognition_current || modalAlumni['Awards recognition current'] || getTrackerAnswerByLabel('awards'),
-                    'Supporting document awards recognition': modalAlumni.supporting_document_awards_recognition || modalAlumni['Supporting document awards recognition'] || getTrackerAnswerByLabel('awards'),
-                    'Unemployment reason': modalAlumni.unemployment_reason || modalAlumni['Unemployment reason'] || getTrackerAnswerByLabel('unemployment'),
-                    'Pursue further study': modalAlumni.pursue_further_study || modalAlumni['Pursue further study'] || getTrackerAnswerByLabel('further study'),
-                    'Date started': modalAlumni.date_started || modalAlumni['Date started'] || getTrackerAnswerByLabel('date started'),
-                    'School name': modalAlumni.school_name || modalAlumni['School name'] || modalAlumni.institution || modalAlumni.university || getTrackerAnswerByLabel('school') || getTrackerAnswerByLabel('institution') || getTrackerAnswerByLabel('university'),
-                  }).map(([label, value]) => (
-                    <tr key={label}>
-                      <td style={{ fontWeight: 'bold', padding: '6px 12px', textAlign: 'right', width: '40%' }}>{label}:</td>
-                      <td style={{ padding: '6px 12px' }}>{
-                        value === undefined || value === null || value === ''
-                          ? <em>No answer</em>
-                          : (typeof value === 'object' ? JSON.stringify(value) : value)
-                      }</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ 
+              background: 'white', 
+              padding: '32px', 
+              borderRadius: '20px', 
+              width: '90%',
+              maxWidth: '900px',
+              maxHeight: '95vh',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              {/* Close button */}
+              <button 
+                onClick={closeModal} 
+                style={{ 
+                  position: 'absolute',
+                  top: '16px',
+                  right: '20px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#999',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#f0f0f0';
+                  e.currentTarget.style.color = '#666';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'none';
+                  e.currentTarget.style.color = '#999';
+                }}
+              >
+                ×
+              </button>
+              
+              {/* Header */}
+              <div style={{ textAlign: 'center', marginBottom: '24px', paddingRight: '40px' }}>
+                <h2 style={{ 
+                  fontSize: '28px', 
+                  fontWeight: '700', 
+                  margin: '0 0 8px 0',
+                  color: '#174f84'
+                }}>
+                  Alumni Details
+                </h2>
+                <div style={{ 
+                  width: '60px', 
+                  height: '4px', 
+                  background: '#174f84', 
+                  borderRadius: '2px',
+                  margin: '0 auto'
+                }}></div>
+              </div>
+              
+              {/* Profile content in grid layout */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '20px',
+                maxHeight: 'calc(95vh - 120px)',
+                overflowY: 'auto',
+                paddingRight: '8px'
+              }}>
+                {/* Personal Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Personal Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[
+                      ['CTU ID', modalAlumni.ctu_id || modalAlumni.CTU_ID || getTrackerAnswerByLabel('ctu id')],
+                      ['First Name', modalAlumni.firstName || modalAlumni.First_Name || modalAlumni.first_name || (modalAlumni.name ? modalAlumni.name.split(' ')[0] : '') || getTrackerAnswerByLabel('first name')],
+                      ['Middle Name', modalAlumni.middleName || modalAlumni.Middle_Name || modalAlumni.middle_name || (modalAlumni.name && modalAlumni.name.split(' ').length > 2 ? modalAlumni.name.split(' ').slice(1, -1).join(' ') : '') || getTrackerAnswerByLabel('middle name')],
+                      ['Last Name', modalAlumni.lastName || modalAlumni.Last_Name || modalAlumni.last_name || (modalAlumni.name ? modalAlumni.name.split(' ').slice(-1)[0] : '') || getTrackerAnswerByLabel('last name')],
+                      ['Gender', modalAlumni.gender || modalAlumni.Gender || getTrackerAnswerByLabel('gender')],
+                      ['Birthdate', modalAlumni.birthdate || modalAlumni.Birthdate || modalAlumni.birth_date || getTrackerAnswerByLabel('birthdate')],
+                      ['Age', modalAlumni.age || modalAlumni.Age || getTrackerAnswerByLabel('age')],
+                      ['Civil Status', modalAlumni.civil_status || modalAlumni.Civil_Status || getTrackerAnswerByLabel('civil status')],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: '500', color: '#555' }}>{label}:</span>
+                        <span style={{ fontWeight: '600', color: '#333', maxWidth: '150px', textAlign: 'right' }}>
+                          {value === undefined || value === null || value === '' ? 'No answer' : (typeof value === 'object' ? JSON.stringify(value) : value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Contact Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Contact Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[
+                      ['Phone Number', modalAlumni.phone_num || modalAlumni.Phone_Number || modalAlumni.phone || getTrackerAnswerByLabel('phone')],
+                      ['Address', modalAlumni.address || modalAlumni.Address || getTrackerAnswerByLabel('address')],
+                      ['Social Media', modalAlumni.social_media || modalAlumni.Social_Media || getTrackerAnswerByLabel('social')],
+                      ['Email', modalAlumni.email || modalAlumni.Email || getTrackerAnswerByLabel('email')],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: '500', color: '#555' }}>{label}:</span>
+                        <span style={{ fontWeight: '600', color: '#333', maxWidth: '150px', textAlign: 'right' }}>
+                          {value === undefined || value === null || value === '' ? 'No answer' : (typeof value === 'object' ? JSON.stringify(value) : value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Academic Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Academic Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[
+                      ['Program Name', modalAlumni.program || modalAlumni.Program_Name || modalAlumni.course || getTrackerAnswerByLabel('program')],
+                      ['Status', modalAlumni.status || modalAlumni.Status || modalAlumni.user_status || getTrackerAnswerByLabel('status')],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: '500', color: '#555' }}>{label}:</span>
+                        <span style={{ fontWeight: '600', color: '#174f84' }}>
+                          {value === undefined || value === null || value === '' ? 'No answer' : (typeof value === 'object' ? JSON.stringify(value) : value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Employment Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Employment Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[
+                      ['Company Name', modalAlumni.company_name_current || modalAlumni['Company name current'] || modalAlumni.company || getTrackerAnswerByLabel('company') || getTrackerAnswerByLabel('employer') || getTrackerAnswerByLabel('current company')],
+                      ['Position', modalAlumni.position_current || modalAlumni['Position current'] || getTrackerAnswerByLabel('position')],
+                      ['Sector', modalAlumni.sector_current || modalAlumni['Sector current'] || getTrackerAnswerByLabel('sector')],
+                      ['Duration', modalAlumni.employment_duration_current || modalAlumni['Employment duration current'] || modalAlumni.employment_duration || getTrackerAnswerByLabel('employment duration') || getTrackerAnswerByLabel('how long') || getTrackerAnswerByLabel('duration')],
+                      ['Salary', modalAlumni.salary_current || modalAlumni['Salary current'] || getTrackerAnswerByLabel('salary')],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: '500', color: '#555' }}>{label}:</span>
+                        <span style={{ fontWeight: '600', color: '#333', maxWidth: '150px', textAlign: 'right' }}>
+                          {value === undefined || value === null || value === '' ? 'No answer' : (typeof value === 'object' ? JSON.stringify(value) : value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Additional Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Additional Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[
+                      ['Supporting Document', modalAlumni.supporting_document_current || modalAlumni['Supporting document current'] || getTrackerAnswerByLabel('supporting document')],
+                      ['Awards/Recognition', modalAlumni.awards_recognition_current || modalAlumni['Awards recognition current'] || getTrackerAnswerByLabel('awards')],
+                      ['Unemployment Reason', modalAlumni.unemployment_reason || modalAlumni['Unemployment reason'] || getTrackerAnswerByLabel('unemployment')],
+                      ['Further Study', modalAlumni.pursue_further_study || modalAlumni['Pursue further study'] || getTrackerAnswerByLabel('further study')],
+                      ['Date Started', modalAlumni.date_started || modalAlumni['Date started'] || getTrackerAnswerByLabel('date started')],
+                      ['School/Institution', modalAlumni.school_name || modalAlumni['School name'] || modalAlumni.institution || modalAlumni.university || getTrackerAnswerByLabel('school') || getTrackerAnswerByLabel('institution') || getTrackerAnswerByLabel('university')],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: '500', color: '#555' }}>{label}:</span>
+                        <span style={{ fontWeight: '600', color: '#333', maxWidth: '150px', textAlign: 'right' }}>
+                          {value === undefined || value === null || value === '' ? 'No answer' : (typeof value === 'object' ? JSON.stringify(value) : value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

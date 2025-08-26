@@ -256,6 +256,7 @@ def export_detailed_ojt_data(request):
             'Social_Media': ojt_user.email,
             'Address': ojt_user.address,
             'Course': ojt_user.course,
+            'Company': ojt_user.company_name_current,
             'Ojt_Start_Date': ojt_user.date_started,
             'Ojt_End_Date': ojt_user.ojt_end_date,
             'Status': ojt_user.ojtstatus,

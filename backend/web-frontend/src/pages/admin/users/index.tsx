@@ -119,6 +119,8 @@ const UsersIndex: React.FC = () => {
         {/* Alumni Table View */}
         {selectedBatch && (
           <div>
+            {/* Header with back button and title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
             <button
               onClick={handleBack}
               style={{
@@ -126,57 +128,84 @@ const UsersIndex: React.FC = () => {
                 background: '#174f84',
                 color: 'white',
                 borderRadius: '50%',
-                width: '32px',
-                height: '32px',
-                fontSize: '18px',
+                  width: '40px',
+                  height: '40px',
+                  fontSize: '20px',
                 cursor: 'pointer',
-                marginBottom: 20,
-              }}
-            >
-              &lsaquo;
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(23, 79, 132, 0.3)',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(23, 79, 132, 0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(23, 79, 132, 0.3)';
+                }}
+              >
+                ←
             </button>
-            {/* Batch title and search/filter row in one flex container */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <h2 style={{ margin: 0 }}>BATCH {selectedBatch}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '600', color: '#174f84' }}>BATCH {selectedBatch}</h2>
+            </div>
+            
+            {/* Search and filter controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <input
                   type="text"
-                  placeholder="🔍 Search...."
+                  placeholder="🔍 Search alumni..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   style={{
-                    padding: '10px 24px',
-                    borderRadius: '24px',
-                    border: '2px solid #222',
-                    fontSize: '16px',
+                    padding: '12px 20px',
+                    borderRadius: '25px',
+                    border: '2px solid #e1e5e9',
+                    fontSize: '14px',
                     outline: 'none',
-                    width: 240,
-                    marginRight: 8,
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                    width: '280px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                     background: '#fff',
-                    transition: 'border 0.2s',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#174f84';
+                    e.target.style.boxShadow = '0 4px 12px rgba(23, 79, 132, 0.15)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e1e5e9';
+                    e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
                   }}
                 />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={{ marginRight: 8, fontWeight: 500, color: '#222', fontSize: 15 }}>COURSE:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ 
+                    marginRight: '8px', 
+                    fontWeight: '500',
+                    fontSize: '14px', 
+                    color: '#555' 
+                  }}>COURSE:</label>
                   <select
                     value={selectedCourse}
                     onChange={e => setSelectedCourse(e.target.value)}
                     style={{
-                      padding: '8px 28px 8px 18px',
+                      padding: '10px 16px',
                       borderRadius: '20px',
-                      border: 'none',
-                      fontSize: '15px',
-                      background: '#3b5bfe',
-                      color: 'white',
-                      fontWeight: 600,
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                      border: '2px solid #e1e5e9',
+                      fontSize: '14px',
+                      background: '#fff',
+                      color: '#333',
+                      fontWeight: '500',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
                       cursor: 'pointer',
                       appearance: 'none',
                       outline: 'none',
+                      minWidth: '120px',
                     }}
                   >
-                    <option value="All">All</option>
+                    <option value="All">All Courses</option>
                     {courseOptions.map((course) => (
                       <option key={course} value={course}>{course}</option>
                     ))}
@@ -184,46 +213,88 @@ const UsersIndex: React.FC = () => {
                 </div>
               </div>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+            
+            {/* Table with optimized layout */}
+            <div style={{ 
+              backgroundColor: 'white', 
+              borderRadius: '12px', 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              overflow: 'hidden'
+            }}>
+              <table style={{ 
+                width: '100%', 
+                borderCollapse: 'collapse',
+                fontSize: '14px'
+              }}>
               <thead>
                 <tr style={{ background: '#174f84', color: 'white' }}>
-                  <th style={{ padding: '12px' }}>#</th>
-                  <th style={{ padding: '12px' }}>Name</th>
-                  <th style={{ padding: '12px' }}>ID Number</th>
-                  <th style={{ padding: '12px' }}>Course</th>
-                  <th style={{ padding: '12px' }}>Batch Graduated</th>
-                  <th style={{ padding: '12px' }}>Status</th>
+                    <th style={{ padding: '16px 12px', textAlign: 'left', fontWeight: '600' }}>#</th>
+                    <th style={{ padding: '16px 12px', textAlign: 'left', fontWeight: '600' }}>Name</th>
+                    <th style={{ padding: '16px 12px', textAlign: 'left', fontWeight: '600' }}>ID Number</th>
+                    <th style={{ padding: '16px 12px', textAlign: 'left', fontWeight: '600' }}>Course</th>
+                    <th style={{ padding: '16px 12px', textAlign: 'left', fontWeight: '600' }}>Batch</th>
+                    <th style={{ padding: '16px 12px', textAlign: 'left', fontWeight: '600' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                        <div style={{ fontSize: '16px' }}>Loading alumni data...</div>
+                      </td>
+                    </tr>
                 ) : filteredAlumni.length === 0 ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No alumni found for this batch.</td></tr>
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                        <div style={{ fontSize: '16px' }}>No alumni found for this batch.</div>
+                      </td>
+                    </tr>
                 ) : (
                   filteredAlumni.map((user, index) => (
                     <tr
                       key={user.id}
-                      style={{ textAlign: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
+                        style={{ 
+                          textAlign: 'left', 
+                          cursor: 'pointer', 
+                          transition: 'all 0.2s ease',
+                          borderBottom: '1px solid #f0f0f0'
+                        }}
                       onClick={() => setSelectedUser(user)}
-                      onMouseOver={e => { (e.currentTarget as HTMLTableRowElement).style.background = '#f0f8ff'; }}
-                      onMouseOut={e => { (e.currentTarget as HTMLTableRowElement).style.background = ''; }}
-                    >
-                      <td style={{ padding: '10px' }}>{String(index + 1).padStart(2, '0')}</td>
-                      <td>{user.name}</td>
-                      <td>{user.ctu_id}</td>
-                      <td>{user.course}</td>
-                      <td>{user.batch}</td>
-                      <td style={{ color: user.status === 'Employed' ? 'teal' : user.status === 'High Position' ? '#e6b800' : user.status === 'Absorb' ? '#0093D9' : 'orangered' }}>{user.status}</td>
+                        onMouseOver={e => { 
+                          e.currentTarget.style.background = '#f8faff'; 
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                        }}
+                        onMouseOut={e => { 
+                          e.currentTarget.style.background = ''; 
+                          e.currentTarget.style.transform = 'translateX(0)';
+                        }}
+                      >
+                        <td style={{ padding: '16px 12px', fontWeight: '500', color: '#666' }}>
+                          {String(index + 1).padStart(2, '0')}
+                        </td>
+                        <td style={{ padding: '16px 12px', fontWeight: '500' }}>{user.name}</td>
+                        <td style={{ padding: '16px 12px', fontFamily: 'monospace', color: '#555' }}>{user.ctu_id}</td>
+                        <td style={{ padding: '16px 12px', color: '#174f84', fontWeight: '500' }}>{user.course}</td>
+                        <td style={{ padding: '16px 12px', color: '#666' }}>{user.batch}</td>
+                        <td style={{ 
+                          padding: '16px 12px', 
+                          fontWeight: '500',
+                          color: user.status === 'Employed' ? '#059669' : 
+                                 user.status === 'High Position' ? '#d97706' : 
+                                 user.status === 'Absorb' ? '#0891b2' : '#dc2626'
+                        }}>
+                          {user.status}
+                        </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
-        {/* Add modal after the table */}
+        {/* User Profile Modal */}
         {selectedUser && (
           <div style={{
             position: 'fixed',
@@ -237,23 +308,179 @@ const UsersIndex: React.FC = () => {
             justifyContent: 'center',
             zIndex: 9999,
           }}>
-            <div style={{ background: 'white', padding: '40px', borderRadius: '16px', minWidth: '340px', textAlign: 'center' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: 24 }}>User Profile</h2>
-              <div style={{ textAlign: 'left', marginBottom: 18 }}>
-                <p><b>Name:</b> {selectedUser.name}</p>
-                <p><b>ID Number:</b> {selectedUser.ctu_id}</p>
-                <p><b>Course:</b> {selectedUser.course}</p>
-                <p><b>Batch:</b> {selectedUser.batch}</p>
-                <p><b>Status:</b> {selectedUser.status}</p>
-                <p><b>Gender:</b> {selectedUser.gender || 'N/A'}</p>
-                <p><b>Birthdate:</b> {selectedUser.birthdate || 'N/A'}</p>
-                <p><b>Age:</b> {selectedUser.birthdate ? calculateAge(selectedUser.birthdate) : 'N/A'}</p>
-                <p><b>Civil Status:</b> {selectedUser.civilStatus || 'N/A'}</p>
-                <p><b>Phone Number:</b> {selectedUser.phone || 'N/A'}</p>
-                <p><b>Address:</b> {selectedUser.address || 'N/A'}</p>
-                <p><b>Social Media:</b> {selectedUser.socialMedia || 'N/A'}</p>
+            <div style={{ 
+              background: 'white', 
+              padding: '32px', 
+              borderRadius: '20px', 
+              width: '90%',
+              maxWidth: '600px',
+              maxHeight: '90vh',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              position: 'relative'
+            }}>
+              {/* Close button */}
+              <button 
+                onClick={() => setSelectedUser(null)} 
+                style={{ 
+                  position: 'absolute',
+                  top: '16px',
+                  right: '20px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#999',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#f0f0f0';
+                  e.currentTarget.style.color = '#666';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'none';
+                  e.currentTarget.style.color = '#999';
+                }}
+              >
+                ×
+              </button>
+              
+              {/* Header */}
+              <div style={{ textAlign: 'center', marginBottom: '32px', paddingRight: '40px' }}>
+                <h2 style={{ 
+                  fontSize: '28px', 
+                  fontWeight: '700', 
+                  margin: '0 0 8px 0',
+                  color: '#174f84'
+                }}>
+                  User Profile
+                </h2>
+                <div style={{ 
+                  width: '60px', 
+                  height: '4px', 
+                  background: '#174f84', 
+                  borderRadius: '2px',
+                  margin: '0 auto'
+                }}></div>
               </div>
-              <button onClick={() => setSelectedUser(null)} style={{ marginTop: '20px', padding: '10px 20px', borderRadius: '8px', background: '#f26c4f', color: 'white', border: 'none', cursor: 'pointer' }}>Close</button>
+              
+              {/* Profile content in grid layout */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                gap: '24px',
+                marginBottom: '32px'
+              }}>
+                {/* Personal Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Personal Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Name:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.name}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>ID Number:</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: '600', color: '#174f84' }}>{selectedUser.ctu_id}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Gender:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.gender || 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Birthdate:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.birthdate || 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Age:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.birthdate ? calculateAge(selectedUser.birthdate) : 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Academic Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Academic Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Course:</span>
+                      <span style={{ fontWeight: '600', color: '#174f84' }}>{selectedUser.course}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Batch:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.batch}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Status:</span>
+                      <span style={{ 
+                        fontWeight: '600',
+                        color: selectedUser.status === 'Employed' ? '#059669' : 
+                               selectedUser.status === 'High Position' ? '#d97706' : 
+                               selectedUser.status === 'Absorb' ? '#0891b2' : '#dc2626'
+                      }}>
+                        {selectedUser.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Contact Information */}
+                <div style={{ background: '#f8faff', padding: '20px', borderRadius: '12px', border: '1px solid #e1e5e9' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    margin: '0 0 16px 0',
+                    color: '#174f84',
+                    borderBottom: '2px solid #174f84',
+                    paddingBottom: '8px'
+                  }}>
+                    Contact Information
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Phone:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.phone || 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Address:</span>
+                      <span style={{ fontWeight: '600', color: '#333', maxWidth: '150px', textAlign: 'right' }}>
+                        {selectedUser.address || 'N/A'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Social Media:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.socialMedia || 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: '500', color: '#555' }}>Civil Status:</span>
+                      <span style={{ fontWeight: '600', color: '#333' }}>{selectedUser.civilStatus || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

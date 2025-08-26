@@ -115,9 +115,18 @@ const App: React.FC = () => {
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <button
               onClick={() => navigate(-1)}
-              style={styles.backButton}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#174f84',
+                fontSize: 24,
+                cursor: 'pointer',
+                padding: 4,
+              }}
+              aria-label="Back"
+              title="Back"
             >
-              &lt; Back
+              ‹
             </button>
             <div style={styles.viewStatistics}>
               <span role="img" aria-label="chart">📊</span> View Statistics

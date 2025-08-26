@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [batchYear, setBatchYear] = useState('');
   const [course, setCourse] = useState('BSIT');
+  const [filterCourse, setFilterCourse] = useState('All');
   const [ojtYears, setOjtYears] = useState<{ year: number; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [importLoading, setImportLoading] = useState(false);
@@ -368,7 +369,7 @@ export default function Dashboard() {
       {/* ===================== Main Content ===================== */}
       <main style={styles.main}>
         <div style={styles.header}>
-          <h1>OJT Imports</h1>
+          <h1>OJT Imports (New)</h1>
           <div style={styles.actions}>
             {activePage === 'imports' && (
               <>
@@ -389,7 +390,28 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <button style={styles.filter}>BSIT</button>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', margin: '20px 0' }}>
+          <span style={{ fontSize: '14px', color: '#174B87', fontWeight: 600 }}>Program:</span>
+          <select
+            style={{
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              backgroundColor: '#5A6DFE',
+              color: 'white',
+              border: 'none',
+              cursor: 'pointer',
+              minWidth: '140px',
+              appearance: 'none'
+            }}
+            value={filterCourse}
+            onChange={(e) => setFilterCourse(e.target.value)}
+          >
+            <option value="All">ALL</option>
+            <option value="BSIT">BSIT</option>
+            <option value="BSIS">BSIS</option>
+            <option value="BSCS">BSCS</option>
+          </select>
+        </div>
 
         {/* ============== Cards OR Details Table OR Statistics ============== */}
         {!showStats ? (

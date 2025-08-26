@@ -19,14 +19,22 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from django.http import JsonResponse
+
+def health_check(request):
+    return JsonResponse({"status": "ok", "message": "Django server is running!"})
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('apps.api.urls')),  # Make sure your app URL is included here
-    path('api/statistics/', include('apps.alumni_stats.urls')),
-    path('api/ojt-statistics/', include('apps.ojt_stats.urls')),
-    path('api/users/', include('apps.alumni_users.urls')),
-    path('api/ojt-users/', include('apps.ojt_users.urls')),
-    path('api/alumni/', include('apps.api.urls')),
+    path('', health_check, name='home'),
+    path('api/health/', health_check, name='health_check'),
+    path('api/', include('apps.api.urls')),  # Enable API endpoints
+    # Temporarily disabled due to migration issues
+    # path('api/statistics/', include('apps.alumni_stats.urls')),
+    # path('api/ojt-statistics/', include('apps.alumni_stats.urls')),
+    # path('api/users/', include('apps.alumni_users.urls')),
+    # path('api/ojt-users/', include('apps.ojt_stats.urls')),
+    # path('api/alumni/', include('apps.api.urls')),
 ]
 
 # Serve media files in development

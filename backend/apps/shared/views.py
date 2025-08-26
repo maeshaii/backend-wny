@@ -112,6 +112,7 @@ def export_ojt_completed_excel(request):
         ("Address", "address"),
         ("Social Media", "social_media"),
         ("Civil Status", "civil_status"),
+        ("Company", "company_name_current"),
         ("Age", "age"),
     ]
 
@@ -179,6 +180,7 @@ def export_ojt_completed_and_remove_extract(request):
         ("Address", "address"),
         ("Social Media", "social_media"),
         ("Civil Status", "civil_status"),
+        ("Company", "company_name_current"),
         ("Age", "age"),
     ]
 

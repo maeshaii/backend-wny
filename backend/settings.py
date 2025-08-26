@@ -11,9 +11,14 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from a .env file if present
+load_dotenv()
 
 
 # Quick-start development settings - unsuitable for production
@@ -41,11 +46,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "apps.api",
     "apps.shared",
-    "apps.tracker",
-    "apps.alumni_stats",
-    "apps.alumni_users",
-    "apps.ojt_users",
-    "apps.ojt_stats",
+    # "apps.tracker",
+    # "apps.alumni_stats",
+    # "apps.alumni_users",
+    # "apps.ojt_users",
+    # "apps.ojt_stats",
     "rest_framework",
     "corsheaders",
 ]
@@ -100,12 +105,8 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'wny-db',
-        'USER': 'postgres',
-        'PASSWORD': '1131',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 

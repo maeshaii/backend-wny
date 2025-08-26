@@ -43,6 +43,41 @@ def get_csrf_token(request):
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+# Utility: delete all OJT-imported users and import records
+@csrf_exempt
+@require_http_methods(["DELETE"]) 
+def delete_all_ojt_import_data(request):
+    try:
+        # Try to hard-delete first
+        try:
+            ojt_users_qs = User.objects.filter(account_type__ojt=True)
+            deleted_users = ojt_users_qs.count()
+            ojt_users_qs.delete()
+            imports_deleted, _ = OJTImport.objects.all().delete()
+            return JsonResponse({'success': True, 'mode': 'hard_delete', 'deleted_users': deleted_users, 'deleted_import_records': imports_deleted})
+        except Exception as hard_err:
+            # Fallback to soft-archive if DB constraints/tables block deletion (e.g., missing follow table)
+            from django.utils import timezone as dj_tz
+            now_suffix = dj_tz.now().strftime('%Y%m%d%H%M%S')
+            archived = 0
+            for user in User.objects.filter(account_type__ojt=True):
+                try:
+                    # Rename CTU ID to free uniqueness for re-imports
+                    user.acc_username = f"{user.acc_username}_OLD_{now_suffix}_{user.user_id}"
+                    user.user_status = 'archived'
+                    user.save(update_fields=['acc_username', 'user_status'])
+                    archived += 1
+                except Exception:
+                    continue
+            # We still clear import history records if possible
+            try:
+                imports_deleted, _ = OJTImport.objects.all().delete()
+            except Exception:
+                imports_deleted = 0
+            return JsonResponse({'success': True, 'mode': 'soft_archive', 'archived_users': archived, 'deleted_import_records': imports_deleted, 'note': 'Users archived and CTU_ID renamed; you can re-import now.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
 @csrf_exempt
 @require_http_methods(["POST", "OPTIONS"])
 def login_view(request):
@@ -626,6 +661,9 @@ def import_ojt_view(request):
                     skipped_count += 1
                     continue
                 
+                # --- Determine company name (optional) ---
+                company_raw = row.get('Ojt_Company') or row.get('OJT_Company') or row.get('Company')
+
                 # --- Create OJT record ---
                 ojt_data = User.objects.create(
                     acc_username=ctu_id,
@@ -643,8 +681,11 @@ def import_ojt_view(request):
                     social_media=str(row.get('Social_Media', '')).strip() if pd.notna(row.get('Social_Media')) else '',
                     year_graduated=int(batch_year) if batch_year.isdigit() else None,
                     course=course,
+                    # Save OJT company name into company_name_current field
+                    company_name_current=(str(company_raw).strip() if pd.notna(company_raw) else ''),
                     date_started=ojt_start_date,
                     ojt_end_date=ojt_end_date,
+                    ojtstatus='in_progress',  # Set initial OJT status
                     account_type=AccountType.objects.get(ojt=True, admin=False, peso=False, user=False, coordinator=False),
                 )
                 
@@ -682,16 +723,17 @@ def ojt_statistics_view(request):
     try:
         coordinator_username = request.GET.get('coordinator', '')
         
-        # Get OJT data for this coordinator only
-        ojt_data = User.objects.filter(account_type__ojt=True) # Only OJT users, no coordinator filter
+        # Get OJT data for this coordinator only (exclude archived)
+        ojt_data = User.objects.filter(account_type__ojt=True).exclude(user_status__iexact='archived') # Only active OJT users
         
         # Group by batch year
         years_data = {}
         for ojt in ojt_data:
             year = ojt.year_graduated
-            if year not in years_data:
-                years_data[year] = 0
-            years_data[year] += 1
+            if year is not None:  # Only include users with valid graduation year
+                if year not in years_data:
+                    years_data[year] = 0
+                years_data[year] += 1
         
         # Convert to list format
         years_list = [{'year': year, 'count': count} for year, count in years_data.items()]
@@ -699,10 +741,364 @@ def ojt_statistics_view(request):
         
         return JsonResponse({
             'success': True,
-            'years': years_list,
-            'total_records': ojt_data.count()
+            'years': years_list
         })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+# NEW: Coordinator OJT Management Endpoints
+@csrf_exempt
+@require_http_methods(["GET"])
+def coordinator_ojt_list_view(request):
+    """Get OJT records for coordinator with full details including dates"""
+    try:
+        coordinator_username = request.GET.get('coordinator', '')
         
+        if not coordinator_username:
+            return JsonResponse({'success': False, 'message': 'Coordinator username required'}, status=400)
+        
+        # Get OJT users with full details (including dates for coordinator), exclude archived
+        ojt_users = User.objects.filter(account_type__ojt=True).exclude(user_status__iexact='archived').order_by('-user_id')
+        
+        ojt_list = []
+        for user in ojt_users:
+            ojt_list.append({
+                'user_id': user.user_id,
+                'ctu_id': user.acc_username,
+                'name': f"{user.f_name} {user.l_name}",
+                'course': user.course,
+                'year_graduated': user.year_graduated,
+                'ojt_status': user.ojtstatus,
+                'date_started': user.date_started,
+                'ojt_end_date': user.ojt_end_date,
+                'phone': user.phone_num,
+                'address': user.address,
+                'civil_status': user.civil_status,
+                'social_media': user.social_media,
+                'gender': user.gender,
+                'birthdate': user.birthdate,
+                'age': user.age
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': ojt_list
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def mark_ojt_completed_view(request):
+    """Mark OJT as completed by coordinator"""
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'message': 'User ID required'}, status=400)
+        
+        # Find the OJT user
+        ojt_user = User.objects.filter(user_id=user_id, account_type__ojt=True).first()
+        if not ojt_user:
+            return JsonResponse({'success': False, 'message': 'OJT user not found'}, status=404)
+        
+        # Update status to completed
+        ojt_user.ojtstatus = 'completed'
+        ojt_user.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'OJT for {ojt_user.f_name} {ojt_user.l_name} marked as completed'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_ojt_status_view(request):
+    """Update OJT status to any value by coordinator"""
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        status = data.get('status')
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'message': 'User ID required'}, status=400)
+        
+        if not status:
+            return JsonResponse({'success': False, 'message': 'Status required'}, status=400)
+        
+        # Validate status values
+        valid_statuses = ['pending', 'ongoing', 'completed', 'incomplete']
+        if status not in valid_statuses:
+            return JsonResponse({'success': False, 'message': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}, status=400)
+        
+        # Find the OJT user
+        ojt_user = User.objects.filter(user_id=user_id, account_type__ojt=True).first()
+        if not ojt_user:
+            return JsonResponse({'success': False, 'message': 'OJT user not found'}, status=404)
+        
+        # Update status
+        ojt_user.ojtstatus = status
+        ojt_user.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'OJT status for {ojt_user.f_name} {ojt_user.l_name} updated to {status}'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def send_completed_to_admin_view(request):
+    """Send completed OJT records to admin for approval"""
+    try:
+        data = json.loads(request.body)
+        user_ids = data.get('user_ids', [])
+        
+        if not user_ids:
+            return JsonResponse({'success': False, 'message': 'User IDs required'}, status=400)
+        
+        # Get the completed OJT users before updating their status
+        completed_ojt_users = User.objects.filter(
+            user_id__in=user_ids,
+            account_type__ojt=True,
+            ojtstatus='completed'
+        )
+        
+        # Update status to pending for all completed OJT users
+        updated_count = completed_ojt_users.update(ojtstatus='pending')
+        
+        # Create notification content with details of sent records
+        if updated_count > 0:
+            notification_content = f"""
+OJT Completed Records Sent to Admin for Approval
+
+Total Records Sent: {updated_count}
+
+Records Details:
+"""
+            
+            for i, user in enumerate(completed_ojt_users, 1):
+                notification_content += f"""
+{i}. {user.f_name} {user.l_name}
+   CTU ID: {user.acc_username}
+   Course: {user.course or 'N/A'}
+   Batch Year: {user.year_graduated or 'N/A'}
+   Phone: {user.phone_num or 'N/A'}
+   Address: {user.address or 'N/A'}
+"""
+            
+            notification_content += f"""
+Date: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
+Status: Pending Admin Approval
+"""
+            
+            # Send notification to all admin users
+            admin_users = User.objects.filter(account_type__admin=True)
+            notifications_created = 0
+            
+            for admin_user in admin_users:
+                try:
+                    Notification.objects.create(
+                        user=admin_user,
+                        notif_type='OJT_PENDING_APPROVAL',
+                        subject='OJT Records Pending Admin Approval',
+                        notifi_content=notification_content,
+                        notif_date=timezone.now()
+                    )
+                    notifications_created += 1
+                except Exception as e:
+                    print(f"Error creating notification for admin {admin_user.acc_username}: {e}")
+                    continue
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'{updated_count} OJT records sent to admin for approval. Notifications sent to {notifications_created} admin users.',
+                'records_sent': updated_count,
+                'notifications_sent': notifications_created
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'No completed OJT records found to send'
+            })
+            
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+# NEW: Admin OJT Management Endpoints
+@csrf_exempt
+@require_http_methods(["GET"])
+def admin_pending_ojt_list_view(request):
+    """Get pending OJT records for admin (without sensitive dates)"""
+    try:
+        # Get pending OJT users (excluding sensitive date fields)
+        pending_ojt_users = User.objects.filter(
+            account_type__ojt=True,
+            ojtstatus='pending'
+        ).order_by('-user_id')
+        
+        ojt_list = []
+        for user in pending_ojt_users:
+            ojt_list.append({
+                'user_id': user.user_id,
+                'ctu_id': user.acc_username,
+                'name': f"{user.f_name} {user.l_name}",
+                'course': user.course,
+                'year_graduated': user.year_graduated,
+                'ojt_status': user.ojtstatus,
+                'phone': user.phone_num,
+                'address': user.address,
+                'civil_status': user.civil_status,
+                'social_media': user.social_media,
+                'gender': user.gender,
+                'age': user.age
+                # Note: date_started and ojt_end_date are intentionally excluded
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': ojt_list
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def admin_approve_ojt_view(request):
+    """Approve OJT record by admin"""
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        admin_user_id = data.get('admin_user_id')  # Optional: to identify which admin approved
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'message': 'User ID required'}, status=400)
+        
+        # Find the pending OJT user
+        ojt_user = User.objects.filter(
+            user_id=user_id,
+            account_type__ojt=True,
+            ojtstatus='pending'
+        ).first()
+        
+        if not ojt_user:
+            return JsonResponse({'success': False, 'message': 'Pending OJT user not found'}, status=404)
+        
+        # Update status to approved
+        ojt_user.ojtstatus = 'approved'
+        ojt_user.save()
+        
+        # Send notification to all coordinators about the approval
+        coordinators = User.objects.filter(account_type__coordinator=True)
+        notifications_created = 0
+        
+        notification_content = f"""
+OJT Record Approved by Admin
+
+Student Details:
+- Name: {ojt_user.f_name} {ojt_user.l_name}
+- CTU ID: {ojt_user.acc_username}
+- Course: {ojt_user.course or 'N/A'}
+- Batch Year: {ojt_user.year_graduated or 'N/A'}
+
+Status: APPROVED
+Date: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+The OJT record has been approved and is now marked as completed.
+"""
+        
+        for coordinator in coordinators:
+            try:
+                Notification.objects.create(
+                    user=coordinator,
+                    notif_type='OJT_APPROVED',
+                    subject='OJT Record Approved',
+                    notifi_content=notification_content,
+                    notif_date=timezone.now()
+                )
+                notifications_created += 1
+            except Exception as e:
+                print(f"Error creating notification for coordinator {coordinator.acc_username}: {e}")
+                continue
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'OJT for {ojt_user.f_name} {ojt_user.l_name} approved. Notifications sent to {notifications_created} coordinators.',
+            'notifications_sent': notifications_created
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def admin_reject_ojt_view(request):
+    """Reject OJT record by admin"""
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        reason = data.get('reason', 'No reason provided')
+        admin_user_id = data.get('admin_user_id')  # Optional: to identify which admin rejected
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'message': 'User ID required'}, status=400)
+        
+        # Find the pending OJT user
+        ojt_user = User.objects.filter(
+            user_id=user_id,
+            account_type__ojt=True,
+            ojtstatus='pending'
+        ).first()
+        
+        if not ojt_user:
+            return JsonResponse({'success': False, 'message': 'Pending OJT user not found'}, status=404)
+        
+        # Update status to rejected
+        ojt_user.ojtstatus = 'rejected'
+        ojt_user.save()
+        
+        # Send notification to all coordinators about the rejection
+        coordinators = User.objects.filter(account_type__coordinator=True)
+        notifications_created = 0
+        
+        notification_content = f"""
+OJT Record Rejected by Admin
+
+Student Details:
+- Name: {ojt_user.f_name} {ojt_user.l_name}
+- CTU ID: {ojt_user.acc_username}
+- Course: {ojt_user.course or 'N/A'}
+- Batch Year: {ojt_user.year_graduated or 'N/A'}
+
+Status: REJECTED
+Reason: {reason}
+Date: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Please review the record and make necessary corrections before resubmitting.
+"""
+        
+        for coordinator in coordinators:
+            try:
+                Notification.objects.create(
+                    user=coordinator,
+                    notif_type='OJT_REJECTED',
+                    subject='OJT Record Rejected',
+                    notifi_content=notification_content,
+                    notif_date=timezone.now()
+                )
+                notifications_created += 1
+            except Exception as e:
+                print(f"Error creating notification for coordinator {coordinator.acc_username}: {e}")
+                continue
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'OJT for {ojt_user.f_name} {ojt_user.l_name} rejected. Notifications sent to {notifications_created} coordinators.',
+            'notifications_sent': notifications_created
+        })
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
@@ -717,7 +1113,7 @@ def ojt_by_year_view(request):
         if not year:
             return JsonResponse({'success': False, 'message': 'Year parameter is required'}, status=400)
         
-        ojt_data = User.objects.filter(year_graduated=year, account_type__ojt=True) # Only OJT users, no coordinator filter
+        ojt_data = User.objects.filter(year_graduated=year, account_type__ojt=True).exclude(user_status__iexact='archived') # Only active OJT users
         
         ojt_list = []
         for ojt in ojt_data:
@@ -735,6 +1131,7 @@ def ojt_by_year_view(request):
                 'civil_status': ojt.civil_status,
                 'social_media': ojt.social_media,
                 'course': ojt.course,
+                'ojt_company': ojt.company_name_current,
                 'ojt_start_date': ojt.date_started,  # Map to date_started field
                 'ojt_end_date': ojt.ojt_end_date,    # Map to ojt_end_date field
                 'batch_year': ojt.year_graduated,

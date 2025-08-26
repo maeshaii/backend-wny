@@ -26,6 +26,19 @@ urlpatterns = [
     path('ojt/import/', import_ojt_view, name='import_ojt'),
     path('ojt/statistics/', ojt_statistics_view, name='ojt_statistics'),
     path('ojt/by-year/', ojt_by_year_view, name='ojt_by_year'),
+    path('ojt/delete-all/', views.delete_all_ojt_import_data, name='delete_all_ojt_import_data'),
+    
+    # NEW: OJT Workflow Endpoints
+    # Coordinator endpoints (with full data including dates)
+    path('ojt/coordinator/list/', views.coordinator_ojt_list_view, name='coordinator_ojt_list'),
+    path('ojt/coordinator/mark-completed/', views.mark_ojt_completed_view, name='mark_ojt_completed'),
+    path('ojt/coordinator/update-status/', views.update_ojt_status_view, name='update_ojt_status'),
+    path('ojt/coordinator/send-to-admin/', views.send_completed_to_admin_view, name='send_completed_to_admin'),
+    
+    # Admin endpoints (without sensitive date data)
+    path('ojt/admin/pending/', views.admin_pending_ojt_list_view, name='admin_pending_ojt_list'),
+    path('ojt/admin/approve/', views.admin_approve_ojt_view, name='admin_approve_ojt'),
+    path('ojt/admin/reject/', views.admin_reject_ojt_view, name='admin_reject_ojt'),
 
     path('users_list_view/', views.users_list_view, name='users_list_view'),
     
