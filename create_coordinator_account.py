@@ -40,23 +40,23 @@ def create_coordinator_account():
             print(f"❌ User with username '{username}' already exists!")
             return
         
-        # Create the coordinator user
-        # Convert password "january,1,2001" to date format
-        password_date = datetime.strptime('2001-01-01', '%Y-%m-%d').date()
+        # Create the coordinator user with secure password
+        coordinator_password = 'coordiwherenayou2025'
         
         coordinator_user = User.objects.create(
             account_type=coordinator_account_type,
             acc_username=username,
-            acc_password=password_date,
             user_status='active',
             f_name='Coordinator',
             l_name='User',
             gender='Not specified'
         )
+        coordinator_user.set_password(coordinator_password)
+        coordinator_user.save()
         
         print(f"✅ Successfully created coordinator account!")
         print(f"   Username: {coordinator_user.acc_username}")
-        print(f"   Password: january,1,2001 (stored as date: {coordinator_user.acc_password})")
+        print(f"   Password: {coordinator_password} (securely hashed)")
         print(f"   Account Type: Coordinator")
         print(f"   Status: {coordinator_user.user_status}")
         

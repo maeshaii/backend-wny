@@ -37,6 +37,7 @@ admin.site.register(SimpleCompTechJob)
 
 # Custom filter for question types
 class QuestionTypeFilter(admin.SimpleListFilter):
+    """Custom filter for filtering questions by document type in the admin interface."""
     title = 'Document Type'
     parameter_name = 'question_type'
 
@@ -52,6 +53,7 @@ class QuestionTypeFilter(admin.SimpleListFilter):
 
 @admin.register(TrackerFileUpload)
 class TrackerFileUploadAdmin(admin.ModelAdmin):
+    """Admin interface for TrackerFileUpload with custom display and filters."""
     list_display = ('original_filename', 'user_name', 'question_text', 'question_id', 'file_size_mb', 'uploaded_at', 'download_link')
     list_filter = (QuestionTypeFilter, 'uploaded_at')
     search_fields = ('original_filename', 'response__user__f_name', 'response__user__l_name')

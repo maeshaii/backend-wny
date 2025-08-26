@@ -1,45 +1,74 @@
+"""
+This app intentionally does not define its own models. All alumni-related models are located in apps.shared.models for reusability across multiple apps.
+"""
+
+import logging
 from django.shortcuts import render
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from apps.shared.models import User
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from apps.shared.models import User, UserProfile, AcademicInfo, EmploymentHistory, TrackerData, OJTInfo
+from apps.shared.services import UserService
+from apps.shared.serializers import AlumniListSerializer
 
-# Create your views here.
+logger = logging.getLogger(__name__)
 
-@csrf_exempt
-@require_http_methods(["GET"])
+# Helper functions
+
+def build_alumni_data(a):
+    profile = getattr(a, 'profile', None)
+    academic = getattr(a, 'academic_info', None)
+    return {
+        'id': a.user_id,
+        'ctu_id': a.acc_username,
+        'name': f"{a.f_name} {a.m_name or ''} {a.l_name}",
+        'course': getattr(academic, 'course', None) if academic else None,
+        'batch': getattr(academic, 'year_graduated', None) if academic else None,
+        'status': a.user_status,
+        'gender': a.gender,
+        'birthdate': str(getattr(profile, 'birthdate', None)) if profile and getattr(profile, 'birthdate', None) else None,
+        'phone': getattr(profile, 'phone_num', None) if profile else None,
+        'address': getattr(profile, 'address', None) if profile else None,
+        'email': getattr(profile, 'email', None) if profile else None,
+        'program': getattr(academic, 'program', None) if academic else None,
+        'civil_status': getattr(profile, 'civil_status', None) if profile else None,
+        'age': getattr(profile, 'age', None) if profile else None,
+        'social_media': getattr(profile, 'social_media', None) if profile else None,
+        'school_name': getattr(academic, 'school_name', None) if academic else None,
+        'profile_pic': profile.profile_pic.url if profile and profile.profile_pic else None,
+    }
+
+def get_field_from_question_map(user, question_text_map, field, *question_labels):
+    for label in question_labels:
+        for qtext, answer in question_text_map.items():
+            if label in qtext:
+                return answer
+    # Special handling for birthdate to avoid 'None' string
+    if field == 'birthdate':
+        val = getattr(user, field, None)
+        return str(val) if val else ''
+    return getattr(user, field, '')
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def alumni_list_view(request):
+    """
+    Returns a list of alumni with selected fields. Uses models from apps.shared.models.
+    """
     year = request.GET.get('year')
-    alumni_qs = User.objects.filter(account_type__user=True)
+    alumni_qs = User.objects.select_related('profile', 'academic_info', 'employment', 'tracker_data').filter(account_type__user=True)
     if year:
-        alumni_qs = alumni_qs.filter(year_graduated=year)
-    alumni_data = [
-        {
-            'id': a.user_id,
-            'ctu_id': a.acc_username,
-            'name': f"{a.f_name} {a.m_name or ''} {a.l_name}",
-            'course': a.course,
-            'batch': a.year_graduated,
-            'status': a.user_status,
-            'gender': a.gender,
-            'birthdate': str(a.birthdate),
-            'phone': a.phone_num,
-            'address': a.address,
-            'email': a.email,
-            'program': a.program,
-            'civil_status': a.civil_status,
-            'age': a.age,
-            'social_media': a.social_media,
-            'school_name': a.school_name,
-            'profile_pic': a.profile_pic.url if a.profile_pic else None,
-        }
-        for a in alumni_qs
-    ]
+        alumni_qs = alumni_qs.filter(academic_info__year_graduated=year)
+    alumni_data = [build_alumni_data(a) for a in alumni_qs]
     return JsonResponse({'success': True, 'alumni': alumni_data})
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def alumni_detail_view(request, user_id):
+    """
+    Returns detailed information for a single alumni, including tracker answers if available.
+    Uses models from apps.shared.models.
+    """
     from apps.shared.models import TrackerResponse, Question
     try:
         user = User.objects.get(user_id=user_id)
@@ -52,23 +81,13 @@ def alumni_detail_view(request, user_id):
             for q in Question.objects.filter(id__in=qids):
                 question_text_map[q.text.lower()] = tracker_answers.get(str(q.id)) or tracker_answers.get(q.id)
         def get_field(field, *question_labels):
-            for label in question_labels:
-                for qtext, answer in question_text_map.items():
-                    if label in qtext:
-                        return answer
-            # Special handling for birthdate to avoid 'None' string
-            if field == 'birthdate':
-                val = getattr(user, field, None)
-                return str(val) if val else ''
-            return getattr(user, field, '')
+            return get_field_from_question_map(user, question_text_map, field, *question_labels)
         data = {
             'id': user.user_id,
             'ctu_id': user.acc_username,
             'name': f"{get_field('f_name', 'first name')} {get_field('m_name', 'middle name') or ''} {get_field('l_name', 'last name')}".strip(),
             'first_name': get_field('f_name', 'first name'),
-            'profile_bio': user.profile_bio,
-            'profile_resume': user.profile_resume.url if user.profile_resume else '',
-            'profile_pic': user.profile_pic.url if user.profile_pic else '',
+            'profile_bio': user.profile.profile_bio if hasattr(user, 'profile') and user.profile else None,
             'middle_name': get_field('m_name', 'middle name'),
             'last_name': get_field('l_name', 'last name'),
             'course': get_field('course', 'course'),
@@ -86,5 +105,6 @@ def alumni_detail_view(request, user_id):
             'school_name': get_field('school_name', 'school name'),
         }
         return JsonResponse({'success': True, 'alumni': data})
-    except User.DoesNotExist:
+    except User.DoesNotExist as e:
+        logger.error(f"User with id {user_id} not found: {e}")
         return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
