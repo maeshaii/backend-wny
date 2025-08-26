@@ -505,13 +505,21 @@ def users_list_view(request):
         return JsonResponse({'success': False, 'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
     current_user_id = request.GET.get('current_user_id')
     try:
-        # Exclude admin users and the current logged-in user
-        users = (
+        # Parse current_user_id to int if possible for safety
+        try:
+            current_user_id_int = int(current_user_id) if current_user_id is not None else None
+        except (TypeError, ValueError):
+            current_user_id_int = None
+
+        # Exclude admin users and the current logged-in user, randomize and limit
+        users_qs = (
             User.objects
             .filter(account_type__admin=False)
-            .exclude(user_id=current_user_id)
             .select_related('profile', 'academic_info')
         )
+        if current_user_id_int is not None:
+            users_qs = users_qs.exclude(user_id=current_user_id_int)
+        users = users_qs.order_by('?')[:10]
         users_data = [
             {
                 'id': u.user_id,
@@ -1021,7 +1029,7 @@ def posts_view(request):
             posts_data = []
 
             for post in posts:
-                # Get repost information
+                # Get repost information for THIS specific post
                 reposts = Repost.objects.filter(post=post).select_related('user')
                 repost_data = []
 
@@ -1037,6 +1045,36 @@ def posts_view(request):
                         }
                     })
 
+                # Get comments for THIS specific post
+                comments = Comment.objects.filter(post=post).select_related('user').order_by('-date_created')
+                comments_data = []
+
+                for comment in comments:
+                    comments_data.append({
+                        'comment_id': comment.comment_id,
+                        'comment_content': comment.comment_content,
+                        'date_created': comment.date_created.isoformat() if comment.date_created else None,
+                        'user': {
+                            'user_id': comment.user.user_id,
+                            'f_name': comment.user.f_name,
+                            'l_name': comment.user.l_name,
+                            'profile_pic': build_profile_pic_url(comment.user),
+                        }
+                    })
+
+                # Get likes for THIS specific post with user information
+                likes = Like.objects.filter(post=post).select_related('user')
+                likes_data = []
+
+                for like in likes:
+                    likes_data.append({
+                        'like_id': like.like_id,
+                        'user_id': like.user.user_id,
+                        'f_name': like.user.f_name,
+                        'l_name': like.user.l_name,
+                        'profile_pic': build_profile_pic_url(like.user),
+                    })
+
                 posts_data.append({
                     'post_id': post.post_id,
                     'post_title': post.post_title,
@@ -1044,10 +1082,12 @@ def posts_view(request):
                     'post_image': post.post_image.url if post.post_image else None,
                     'type': post.type,
                     'created_at': post.created_at.isoformat() if hasattr(post, 'created_at') else None,
-                    'likes_count': post.likes.count(),
+                    'likes_count': len(likes_data),
                     'comments_count': post.comments.count(),
                     'reposts_count': post.reposts.count(),
+                    'likes': likes_data,
                     'reposts': repost_data,
+                    'comments': comments_data,
                     'user': {
                         'user_id': post.user.user_id,
                         'f_name': post.user.f_name,
@@ -1100,16 +1140,13 @@ def posts_view(request):
                 # Handle base64 image data
                 import base64
                 from django.core.files.base import ContentFile
-                from django.core.files.uploadedfile import InMemoryUploadedFile
-                import io
-
+                import uuid
                 try:
                     # Extract base64 data
                     format, imgstr = post_image.split(';base64,')
                     ext = format.split('/')[-1]
 
                     # Create file name
-                    import uuid
                     filename = f"post_image_{uuid.uuid4()}.{ext}"
 
                     # Convert base64 to file
@@ -1135,12 +1172,13 @@ def posts_view(request):
                         type=data.get('type', 'personal')
                     )
             else:
+                # If it's a URL or path, try to use it directly (rare)
                 post = Post.objects.create(
                     user=user,
                     post_cat=post_category,
                     post_title=data.get('post_title', ''),
                     post_content=data.get('post_content', ''),
-                    post_image=post_image,
+                    post_image=None,
                     type=data.get('type', 'personal')
                 )
             print(f"DEBUG: Created post: {post.post_id}")
@@ -1148,6 +1186,7 @@ def posts_view(request):
             return JsonResponse({
                 'success': True,
                 'post_id': post.post_id,
+                'post_image': post.post_image.url if post.post_image else None,
                 'message': 'Post created successfully'
             })
         except Exception as e:
