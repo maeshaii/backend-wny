@@ -5,6 +5,7 @@ This app intentionally does not define its own models. All alumni-related models
 import logging
 from django.shortcuts import render
 from django.http import JsonResponse
+from django.core.files.storage import default_storage
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from apps.shared.models import User, UserProfile, AcademicInfo, EmploymentHistory, TrackerData, OJTInfo
@@ -14,6 +15,24 @@ from apps.shared.serializers import AlumniListSerializer
 logger = logging.getLogger(__name__)
 
 # Helper functions
+
+def _build_profile_pic_url(user):
+    try:
+        profile = getattr(user, 'profile', None)
+        pic = getattr(profile, 'profile_pic', None) if profile else None
+        if pic:
+            url = pic.url
+            try:
+                modified = default_storage.get_modified_time(pic.name)
+                if modified:
+                    return f"{url}?t={int(modified.timestamp())}"
+            except Exception:
+                pass
+            return url
+    except Exception:
+        pass
+    return None
+
 
 def build_alumni_data(a):
     profile = getattr(a, 'profile', None)
@@ -35,7 +54,7 @@ def build_alumni_data(a):
         'age': getattr(profile, 'age', None) if profile else None,
         'social_media': getattr(profile, 'social_media', None) if profile else None,
         'school_name': getattr(academic, 'school_name', None) if academic else None,
-        'profile_pic': profile.profile_pic.url if profile and profile.profile_pic else None,
+        'profile_pic': _build_profile_pic_url(a),
     }
 
 def get_field_from_question_map(user, question_text_map, field, *question_labels):
@@ -110,6 +129,7 @@ def alumni_detail_view(request, user_id):
             'age': get_field('age', 'age'),
             'social_media': get_field('social_media', 'social media'),
             'school_name': getattr(academic_info, 'school_name', None) if academic_info else get_field('school_name', 'school name'),
+            'profile_pic': _build_profile_pic_url(user),
         }
         return JsonResponse({'success': True, 'alumni': data})
     except User.DoesNotExist as e:
