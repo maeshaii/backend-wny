@@ -979,18 +979,62 @@ def update_alumni_profile(request):
 @api_view(['GET'])
 def search_alumni(request):
     query = request.GET.get('q', '').strip()
+    current_user_id = request.GET.get('current_user_id')
+    
     if not query:
         return JsonResponse({'results': []})
+    
     # Search by first, middle, or last name (case-insensitive)
     alumni = User.objects.filter(
         Q(f_name__icontains=query) |
         Q(m_name__icontains=query) |
         Q(l_name__icontains=query),
         account_type__user=True
-    )[:10]
+    )
+    
+    # Exclude current user from search results
+    if current_user_id:
+        try:
+            current_user_id_int = int(current_user_id)
+            alumni = alumni.exclude(user_id=current_user_id_int)
+        except (ValueError, TypeError):
+            pass  # If current_user_id is invalid, continue without filtering
+    
+    # Limit results and convert to response format
+    alumni = alumni[:50]  # Increased from 10 to 50 to show more results
     results = [
         {
             'id': a.user_id,
+            'user_id': a.user_id,  # Add both id and user_id for compatibility
+            'name': f"{a.f_name} {a.l_name}",
+            'profile_pic': a.profile.profile_pic.url if hasattr(a, 'profile') and a.profile and a.profile.profile_pic else None
+        }
+        for a in alumni
+    ]
+    return JsonResponse({'results': results})
+
+
+@api_view(['GET'])
+def get_all_alumni(request):
+    """Get all alumni for search purposes"""
+    current_user_id = request.GET.get('current_user_id')
+    
+    # Get all alumni users
+    alumni = User.objects.filter(account_type__user=True)
+    
+    # Exclude current user from results
+    if current_user_id:
+        try:
+            current_user_id_int = int(current_user_id)
+            alumni = alumni.exclude(user_id=current_user_id_int)
+        except (ValueError, TypeError):
+            pass
+    
+    # Convert to response format
+    results = [
+        {
+            'id': a.user_id,
+            'user_id': a.user_id,
             'name': f"{a.f_name} {a.l_name}",
             'profile_pic': a.profile.profile_pic.url if hasattr(a, 'profile') and a.profile and a.profile.profile_pic else None
         }

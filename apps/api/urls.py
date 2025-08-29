@@ -78,6 +78,7 @@ urlpatterns = [
     path('alumni/profile/delete/', delete_alumni_profile_pic, name='delete_alumni_profile_pic'),
     path('search/', search_alumni, name='search_alumni'),
     path('alumni/search/', views.search_alumni, name='search_alumni'),
+    path('alumni/all/', views.get_all_alumni, name='get_all_alumni'),
     
     # Posts API endpoints
     path('posts/', views.posts_view, name='posts'),
