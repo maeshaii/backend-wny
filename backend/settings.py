@@ -50,7 +50,6 @@ INSTALLED_APPS = [
     "apps.alumni_stats",
     "apps.alumni_users",
     "apps.ojt_users",
-    "apps.ojt_stats",
     "rest_framework",
     "corsheaders",
 ]
@@ -217,7 +216,7 @@ SIMPLE_JWT = {
 # If not provided, a key will be derived from SECRET_KEY at runtime
 INITIAL_PASSWORD_FERNET_KEY = os.getenv('INITIAL_PASSWORD_FERNET_KEY')
 
-AUTH_USER_MODEL = os.getenv('AUTH_USER_MODEL', 'shared.User')
+AUTH_USER_MODEL = 'shared.User'
 DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.getenv('DATA_UPLOAD_MAX_NUMBER_FIELDS', '10000'))
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DATA_UPLOAD_MAX_MEMORY_SIZE', str(10 * 1024 * 1024)))
 FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('FILE_UPLOAD_MAX_MEMORY_SIZE', str(10 * 1024 * 1024)))

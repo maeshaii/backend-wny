@@ -979,62 +979,18 @@ def update_alumni_profile(request):
 @api_view(['GET'])
 def search_alumni(request):
     query = request.GET.get('q', '').strip()
-    current_user_id = request.GET.get('current_user_id')
-    
     if not query:
         return JsonResponse({'results': []})
-    
     # Search by first, middle, or last name (case-insensitive)
     alumni = User.objects.filter(
         Q(f_name__icontains=query) |
         Q(m_name__icontains=query) |
         Q(l_name__icontains=query),
         account_type__user=True
-    )
-    
-    # Exclude current user from search results
-    if current_user_id:
-        try:
-            current_user_id_int = int(current_user_id)
-            alumni = alumni.exclude(user_id=current_user_id_int)
-        except (ValueError, TypeError):
-            pass  # If current_user_id is invalid, continue without filtering
-    
-    # Limit results and convert to response format
-    alumni = alumni[:50]  # Increased from 10 to 50 to show more results
+    )[:10]
     results = [
         {
             'id': a.user_id,
-            'user_id': a.user_id,  # Add both id and user_id for compatibility
-            'name': f"{a.f_name} {a.l_name}",
-            'profile_pic': a.profile.profile_pic.url if hasattr(a, 'profile') and a.profile and a.profile.profile_pic else None
-        }
-        for a in alumni
-    ]
-    return JsonResponse({'results': results})
-
-
-@api_view(['GET'])
-def get_all_alumni(request):
-    """Get all alumni for search purposes"""
-    current_user_id = request.GET.get('current_user_id')
-    
-    # Get all alumni users
-    alumni = User.objects.filter(account_type__user=True)
-    
-    # Exclude current user from results
-    if current_user_id:
-        try:
-            current_user_id_int = int(current_user_id)
-            alumni = alumni.exclude(user_id=current_user_id_int)
-        except (ValueError, TypeError):
-            pass
-    
-    # Convert to response format
-    results = [
-        {
-            'id': a.user_id,
-            'user_id': a.user_id,
             'name': f"{a.f_name} {a.l_name}",
             'profile_pic': a.profile.profile_pic.url if hasattr(a, 'profile') and a.profile and a.profile.profile_pic else None
         }
@@ -1719,3 +1675,127 @@ def check_follow_status_view(request, user_id):
         return JsonResponse({'error': 'User not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def posts_by_user_type_view(request):
+    """Get posts filtered by user type (alumni, OJT, etc.)"""
+    try:
+        user_type = request.GET.get('user_type', 'all')
+        
+        if user_type == 'alumni':
+            users = User.objects.filter(account_type__user=True)
+        elif user_type == 'ojt':
+            users = User.objects.filter(account_type__ojt=True)
+        elif user_type == 'coordinator':
+            users = User.objects.filter(account_type__coordinator=True)
+        else:
+            users = User.objects.all()
+        
+        posts = Post.objects.filter(user__in=users).select_related('user', 'post_cat').order_by('-post_id')
+        posts_data = []
+        
+        for post in posts:
+            try:
+                # Get likes count
+                likes_count = Like.objects.filter(post=post).count()
+                # Get comments count
+                comments_count = Comment.objects.filter(post=post).count()
+                # Get reposts count
+                reposts_count = Repost.objects.filter(post=post).count()
+                
+                posts_data.append({
+                    'post_id': post.post_id,
+                    'post_title': post.post_title,
+                    'post_content': post.post_content,
+                    'post_image': (post.post_image.url if getattr(post, 'post_image', None) else None),
+                    'type': post.type,
+                    'created_at': post.created_at.isoformat() if hasattr(post, 'created_at') else None,
+                    'likes_count': likes_count,
+                    'comments_count': comments_count,
+                    'reposts_count': reposts_count,
+                    'user': {
+                        'user_id': post.user.user_id,
+                        'f_name': post.user.f_name,
+                        'l_name': post.user.l_name,
+                        'profile_pic': build_profile_pic_url(post.user),
+                    },
+                    'category': {
+                        'post_cat_id': post.post_cat.post_cat_id if getattr(post, 'post_cat', None) else None,
+                        'events': post.post_cat.events if getattr(post, 'post_cat', None) else False,
+                        'announcements': post.post_cat.announcements if getattr(post, 'post_cat', None) else False,
+                        'donation': post.post_cat.donation if getattr(post, 'post_cat', None) else False,
+                        'personal': post.post_cat.personal if getattr(post, 'post_cat', None) else False,
+                    }
+                })
+            except Exception:
+                continue
+                
+        return JsonResponse({'posts': posts_data})
+    except Exception as e:
+        logger.error(f"posts_by_user_type_view failed: {e}")
+        return JsonResponse({'posts': []}, status=200)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_all_alumni(request):
+    """Get all alumni with pagination and search capabilities"""
+    try:
+        page = int(request.GET.get('page', 1))
+        limit = int(request.GET.get('limit', 20))
+        search = request.GET.get('search', '').strip()
+        
+        # Base queryset
+        alumni = User.objects.filter(account_type__user=True).select_related('profile', 'academic_info')
+        
+        # Apply search if provided
+        if search:
+            alumni = alumni.filter(
+                Q(f_name__icontains=search) |
+                Q(m_name__icontains=search) |
+                Q(l_name__icontains=search) |
+                Q(acc_username__icontains=search)
+            )
+        
+        # Calculate pagination
+        total_count = alumni.count()
+        start = (page - 1) * limit
+        end = start + limit
+        
+        # Get paginated results
+        alumni_page = alumni[start:end]
+        
+        alumni_data = []
+        for a in alumni_page:
+            try:
+                alumni_data.append({
+                    'id': a.user_id,
+                    'ctu_id': a.acc_username,
+                    'name': f"{a.f_name} {a.m_name or ''} {a.l_name}".strip(),
+                    'course': getattr(a.academic_info, 'course', None) if hasattr(a, 'academic_info') else None,
+                    'batch': getattr(a.academic_info, 'year_graduated', None) if hasattr(a, 'academic_info') else None,
+                    'status': a.user_status,
+                    'gender': a.gender,
+                    'birthdate': str(getattr(a.profile, 'birthdate', None)) if hasattr(a, 'profile') and getattr(a, 'profile', None) else None,
+                    'phone': getattr(a.profile, 'phone_num', None) if hasattr(a, 'profile') and getattr(a, 'profile', None) else None,
+                    'address': getattr(a.profile, 'address', None) if hasattr(a, 'profile') and getattr(a, 'profile', None) else None,
+                    'civilStatus': getattr(a.profile, 'civil_status', None) if hasattr(a, 'profile') and getattr(a, 'profile', None) else None,
+                    'socialMedia': getattr(a.profile, 'social_media', None) if hasattr(a, 'profile') and getattr(a, 'profile', None) else None,
+                    'profile_pic': build_profile_pic_url(a),
+                })
+            except Exception:
+                continue
+        
+        return JsonResponse({
+            'success': True,
+            'alumni': alumni_data,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'pages': (total_count + limit - 1) // limit
+            }
+        })
+    except Exception as e:
+        logger.error(f"get_all_alumni failed: {e}")
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
