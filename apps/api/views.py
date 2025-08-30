@@ -1371,6 +1371,33 @@ def post_comments_view(request, post_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def post_likes_list_view(request, post_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        post = Post.objects.get(post_id=post_id)
+        likes = Like.objects.filter(post=post).select_related('user').order_by('-like_id')
+        likers = []
+        for lk in likes:
+            likers.append({
+                'user_id': lk.user.user_id,
+                'f_name': lk.user.f_name,
+                'l_name': lk.user.l_name,
+                'profile_pic': build_profile_pic_url(lk.user),
+            })
+        return JsonResponse({'likes': likers})
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
 @require_http_methods(["DELETE", "OPTIONS"])
 def post_delete_view(request, post_id):
     if request.method == "OPTIONS":
@@ -1531,6 +1558,51 @@ def repost_delete_view(request, repost_id):
         return JsonResponse({'error': 'Repost not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def post_reposts_list_view(request, post_id):
+    if request.method == "OPTIONS":
+        response = JsonResponse({'detail': 'OK'})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        return response
+
+    try:
+        # Get the post
+        post = Post.objects.get(post_id=post_id)
+        
+        # Get all reposts for this post
+        reposts = Repost.objects.filter(post=post).select_related('user')
+        
+        # Format the repost data
+        repost_data = []
+        for repost in reposts:
+            repost_data.append({
+                'user_id': repost.user.user_id,
+                'f_name': repost.user.f_name,
+                'l_name': repost.user.l_name,
+                'profile_pic': build_profile_pic_url(repost.user),
+                'repost_date': repost.repost_date.isoformat() if repost.repost_date else None
+            })
+        
+        response = JsonResponse({
+            'success': True,
+            'reposts': repost_data,
+            'count': len(repost_data)
+        })
+        response["Access-Control-Allow-Origin"] = "*"
+        return response
+        
+    except Post.DoesNotExist:
+        response = JsonResponse({'error': 'Post not found'}, status=404)
+        response["Access-Control-Allow-Origin"] = "*"
+        return response
+    except Exception as e:
+        response = JsonResponse({'error': str(e)}, status=500)
+        response["Access-Control-Allow-Origin"] = "*"
+        return response
 
 @csrf_exempt
 @require_http_methods(["GET", "OPTIONS"])
