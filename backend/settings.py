@@ -32,7 +32,7 @@ DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'  # Default to True for deve
 
 
 # Accept requests from localhost, emulator, and all relevant LAN IPs (including mobile)
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
