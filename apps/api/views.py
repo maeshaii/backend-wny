@@ -1049,7 +1049,7 @@ def posts_view(request):
                     for repost in reposts:
                         repost_data.append({
                             'repost_id': repost.repost_id,
-                            'repost_date': repost.repost_date.isoformat(),
+                    'repost_date': repost.repost_date.astimezone(timezone.get_current_timezone()).isoformat(),
                             'user': {
                                 'user_id': repost.user.user_id,
                                 'f_name': repost.user.f_name,
@@ -1065,7 +1065,7 @@ def posts_view(request):
                         comments_data.append({
                             'comment_id': comment.comment_id,
                             'comment_content': comment.comment_content,
-                            'date_created': comment.date_created.isoformat() if comment.date_created else None,
+                    'date_created': comment.date_created.astimezone(timezone.get_current_timezone()).isoformat() if comment.date_created else None,
                             'user': {
                                 'user_id': comment.user.user_id,
                                 'f_name': comment.user.f_name,
@@ -1092,7 +1092,7 @@ def posts_view(request):
                         'post_content': post.post_content,
                         'post_image': (post.post_image.url if getattr(post, 'post_image', None) else None),
                         'type': post.type,
-                        'created_at': post.created_at.isoformat() if hasattr(post, 'created_at') else None,
+                        'created_at': post.created_at.astimezone(timezone.get_current_timezone()).isoformat() if hasattr(post, 'created_at') else None,
                         'likes_count': len(likes_data),
                         'comments_count': post.comments.count() if hasattr(post, 'comments') else 0,
                         'reposts_count': post.reposts.count() if hasattr(post, 'reposts') else 0,
