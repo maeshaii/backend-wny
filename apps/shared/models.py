@@ -160,16 +160,18 @@ class Message(models.Model):
         ('file', 'File'),
         ('system', 'System'),
     ]
-    
+
     message_id = models.AutoField(primary_key=True)
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE,
+        related_name='messages', null=True, blank=True
+    )
     sender = models.ForeignKey('User', on_delete=models.CASCADE, related_name='sent_messages')
-    # New enhanced fields
-    content = models.TextField()
+    content = models.TextField(default="", blank=True)  # ✅ fixed
     message_type = models.CharField(max_length=20, choices=MESSAGE_TYPES, default='text')
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['created_at']
         db_table = 'shared_message'
@@ -178,13 +180,14 @@ class Message(models.Model):
             models.Index(fields=['sender', 'created_at']),
             models.Index(fields=['is_read']),
         ]
-        
+
     def __str__(self):
         return f"{self.sender.full_name}: {self.content[:50]}"
-    
+
     @property
     def sender_name(self):
         return self.sender.full_name
+
 
 class MessageAttachment(models.Model):
     attachment_id = models.AutoField(primary_key=True)
