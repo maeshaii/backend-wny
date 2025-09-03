@@ -5,7 +5,7 @@ Consider splitting into multiple files if the number of serializers grows.
 from rest_framework import serializers
 from .models import (
     User, UserProfile, AcademicInfo, EmploymentHistory, 
-    TrackerData, OJTInfo, AccountType
+    TrackerData, OJTInfo, AccountType, Conversation, Message, MessageAttachment
 )
 
 
@@ -208,3 +208,154 @@ class AlumniStatsSerializer(serializers.Serializer):
     
     # Job alignment breakdown
     job_alignment_breakdown = serializers.DictField(child=serializers.IntegerField(), required=False)
+
+
+# Messaging Serializers
+class MessageAttachmentSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = MessageAttachment
+        fields = ['attachment_id', 'file', 'file_url', 'file_name', 'file_type', 'file_size', 'uploaded_at']
+        read_only_fields = ['attachment_id', 'uploaded_at']
+    
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+        return None
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = UserSerializer(read_only=True)
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    sender_name = serializers.CharField(source='sender.full_name', read_only=True)
+    
+    class Meta:
+        model = Message
+        fields = [
+            'message_id', 'sender', 'sender_name', 'content', 'message_type', 
+            'is_read', 'created_at', 'attachments'
+        ]
+        read_only_fields = ['message_id', 'sender', 'created_at']
+
+class ConversationSerializer(serializers.ModelSerializer):
+    participants = UserSerializer(many=True, read_only=True)
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    other_participant = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Conversation
+        fields = [
+            'conversation_id', 'participants', 'last_message', 'unread_count', 
+            'other_participant', 'updated_at'
+        ]
+        read_only_fields = ['conversation_id', 'created_at', 'updated_at']
+    
+    def get_last_message(self, obj):
+        last_msg = obj.get_last_message()
+        if last_msg:
+            return {
+                'message_id': last_msg.message_id,
+                'content': last_msg.content,
+                'sender_name': last_msg.sender.full_name,
+                'sender_id': last_msg.sender.user_id,
+                'created_at': last_msg.created_at,
+                'is_read': last_msg.is_read,
+                'message_type': last_msg.message_type,
+            }
+        return None
+    
+    def get_unread_count(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.get_unread_count(request.user)
+        return 0
+    
+    def get_other_participant(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            other_user = obj.get_other_participant(request.user)
+            if other_user:
+                return {
+                    'user_id': other_user.user_id,
+                    'full_name': other_user.full_name,
+                    'f_name': other_user.f_name,
+                    'l_name': other_user.l_name,
+                    'acc_username': other_user.acc_username,
+                }
+        return None
+
+class CreateConversationSerializer(serializers.ModelSerializer):
+    participant_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        help_text="List of user IDs to include in the conversation"
+    )
+    
+    class Meta:
+        model = Conversation
+        fields = ['participant_ids']
+    
+    def validate_participant_ids(self, value):
+        """Validate that participant IDs exist and are valid users"""
+        if not value:
+            raise serializers.ValidationError("At least one participant is required.")
+        
+        # Check if users exist and have messaging access
+        users = User.objects.filter(user_id__in=value)
+        
+        if len(users) != len(value):
+            raise serializers.ValidationError("Some users do not exist.")
+        
+        # Check if users have messaging access (alumni or ojt)
+        invalid_users = []
+        for user in users:
+            account_type = user.account_type
+            if not (account_type.alumni or account_type.ojt):
+                invalid_users.append(user.full_name)
+        
+        if invalid_users:
+            raise serializers.ValidationError(
+                f"Users {', '.join(invalid_users)} do not have messaging access."
+            )
+        
+        return value
+    
+    def create(self, validated_data):
+        participant_ids = validated_data.pop('participant_ids')
+        conversation = Conversation.objects.create()
+        
+        # Add current user and other participants
+        current_user = self.context['request'].user
+        participants = [current_user]
+        
+        # Add other participants
+        other_users = User.objects.filter(user_id__in=participant_ids)
+        participants.extend(other_users)
+        
+        conversation.participants.set(participants)
+        return conversation
+
+class MessageCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = ['content', 'message_type']
+    
+    def validate_message_type(self, value):
+        """Validate message type"""
+        valid_types = ['text', 'image', 'file', 'system']
+        if value not in valid_types:
+            raise serializers.ValidationError(f"Invalid message type. Must be one of: {', '.join(valid_types)}")
+        return value
+    
+    def validate_content(self, value):
+        """Validate message content"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("Message content cannot be empty.")
+        
+        if len(value.strip()) > 1000:
+            raise serializers.ValidationError("Message content cannot exceed 1000 characters.")
+        
+        return value.strip()

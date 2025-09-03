@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/ojt-statistics/', include('apps.ojt_stats.urls')),
     path('api/users/', include('apps.alumni_users.urls')),
     path('api/ojt-users/', include('apps.ojt_users.urls')),
+    path('api/messaging/', include('apps.messaging.urls')),
 ]
 
 # Serve media files in development

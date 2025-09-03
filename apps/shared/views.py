@@ -123,11 +123,14 @@ def import_alumni_excel(request):
             if not batch_year:
                 return JsonResponse({'success': False, 'message': 'Batch year is required'}, status=400)
             
-            # Get alumni account type dynamically
-            try:
-                alumni_account_type = AccountType.objects.get(user=True, admin=False, coordinator=False, peso=False, ojt=False)
-            except AccountType.DoesNotExist:
-                return JsonResponse({'success': False, 'message': 'Alumni account type not found'}, status=500)
+            # Get or create alumni account type dynamically to avoid 500s on fresh DBs
+            alumni_account_type, _ = AccountType.objects.get_or_create(
+                user=True,
+                admin=False,
+                coordinator=False,
+                peso=False,
+                ojt=False,
+            )
             
             df = pd.read_excel(request.FILES['file'])
             created_count = 0

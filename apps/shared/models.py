@@ -127,12 +127,87 @@ class Like(models.Model):
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='likes')
     post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='likes')
 
+class Conversation(models.Model):
+    conversation_id = models.AutoField(primary_key=True)
+    participants = models.ManyToManyField('User', related_name='conversations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        db_table = 'shared_conversation'
+        
+    def get_other_participant(self, current_user):
+        """Get the other participant in a 1-on-1 conversation"""
+        return self.participants.exclude(user_id=current_user.user_id).first()
+    
+    def get_last_message(self):
+        """Get the last message in the conversation"""
+        return self.messages.last()
+    
+    def get_unread_count(self, user):
+        """Get unread message count for a specific user"""
+        return self.messages.filter(is_read=False).exclude(sender=user).count()
+    
+    def __str__(self):
+        participant_names = [f"{p.f_name} {p.l_name}" for p in self.participants.all()]
+        return f"Conversation: {', '.join(participant_names)}"
+
 class Message(models.Model):
+    MESSAGE_TYPES = [
+        ('text', 'Text'),
+        ('image', 'Image'),
+        ('file', 'File'),
+        ('system', 'System'),
+    ]
+    
     message_id = models.AutoField(primary_key=True)
-    sender_id = models.IntegerField()
-    receiver_id = models.IntegerField()
-    message_content = models.TextField()
-    date_send = models.DateTimeField()
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', null=True, blank=True)
+    sender = models.ForeignKey('User', on_delete=models.CASCADE, related_name='sent_messages')
+    # New enhanced fields
+    content = models.TextField()
+    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPES, default='text')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        db_table = 'shared_message'
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['sender', 'created_at']),
+            models.Index(fields=['is_read']),
+        ]
+        
+    def __str__(self):
+        return f"{self.sender.full_name}: {self.content[:50]}"
+    
+    @property
+    def sender_name(self):
+        return self.sender.full_name
+
+class MessageAttachment(models.Model):
+    attachment_id = models.AutoField(primary_key=True)
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='message_attachments/%Y/%m/%d/')
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=50)
+    file_size = models.IntegerField()
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'shared_messageattachment'
+        indexes = [
+            models.Index(fields=['message', 'uploaded_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.file_name} ({self.file_type})"
+    
+    @property
+    def file_size_mb(self):
+        """Return file size in MB"""
+        return round(self.file_size / (1024 * 1024), 2)
 
 class Notification(models.Model):
     notification_id = models.AutoField(primary_key=True)

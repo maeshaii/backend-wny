@@ -269,12 +269,15 @@ def import_alumni_view(request):
             }, status=400)
         
         # Get alumni account type (user=True) - ensure AccountType is properly imported
-        try:
-            from apps.shared.models import AccountType
-            alumni_account_type = AccountType.objects.get(user=True, admin=False, peso=False, coordinator=False)
-        except Exception as e:
-            print(f"DEBUG: Error getting alumni account type: {e}")
-            return JsonResponse({'success': False, 'message': f'Alumni account type not found: {str(e)}'}, status=500)
+        # Get or create alumni account type to avoid failures when it's missing
+        from apps.shared.models import AccountType
+        alumni_account_type, _ = AccountType.objects.get_or_create(
+            user=True,
+            admin=False,
+            peso=False,
+            coordinator=False,
+            ojt=False,
+        )
         
         created_count = 0
         skipped_count = 0

@@ -50,8 +50,10 @@ INSTALLED_APPS = [
     "apps.alumni_stats",
     "apps.alumni_users",
     "apps.ojt_users",
+    "apps.messaging",  # Add this new app
     "rest_framework",
     "corsheaders",
+    "channels",  # Add this
 ]
 
 MIDDLEWARE = [
@@ -241,3 +243,24 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     X_FRAME_OPTIONS = 'DENY'
+
+
+# Add these at the bottom of the file
+ASGI_APPLICATION = 'backend.asgi.application'
+# Prefer Redis if available, otherwise fallback to in-memory for development
+REDIS_URL = os.getenv('REDIS_URL')
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
